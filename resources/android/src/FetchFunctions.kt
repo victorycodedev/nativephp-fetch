@@ -1229,14 +1229,19 @@ private object FetchClient {
             .toLong()
         val headerDelay = parseRetryAfter(retryAfter)
         val base = headerDelay ?: calculated
-        val capped = policy.maxDelay?.let { minOf(base, it) } ?: base
-        val jittered = capped.toDouble() * Random.nextDouble(0.8, 1.2)
-        return jittered.coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
+        val jittered = base.toDouble() * Random.nextDouble(0.8, 1.2)
+        val capped = policy.maxDelay?.let {
+            minOf(jittered, it.toDouble())
+        } ?: jittered
+        return capped.coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
     }
 
     private fun parseRetryAfter(value: String?): Long? {
         val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        text.toLongOrNull()?.let { return it.coerceAtLeast(0L) * 1000L }
+        text.toLongOrNull()?.let {
+            return it.coerceAtLeast(0L)
+                .coerceAtMost(Long.MAX_VALUE / 1000L) * 1000L
+        }
 
         return try {
             val target = ZonedDateTime.parse(text, DateTimeFormatter.RFC_1123_DATE_TIME)

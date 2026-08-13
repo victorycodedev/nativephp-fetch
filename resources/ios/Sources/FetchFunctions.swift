@@ -462,6 +462,13 @@ private final class FetchClient: NSObject,
             finishStandardCancelled(operation)
         }
 
+        if downloadState != nil {
+            finishDownload(
+                requestId: requestId,
+                cancelled: true
+            )
+        }
+
         return true
     }
 
@@ -1658,14 +1665,14 @@ private final class FetchClient: NSObject,
             Double(exponent)
         )
         let headerDelay = parseRetryAfter(retryAfter)
-        var delay = headerDelay ?? Int(
+        let delay = headerDelay ?? Int(
             min(calculated, Double(Int.max))
         )
-        if let maxDelay = policy.maxDelay {
-            delay = min(delay, maxDelay)
-        }
         let jittered = Double(max(delay, 0)) * Double.random(in: 0.8...1.2)
-        return Int(min(max(jittered, 0), Double(Int.max)))
+        let capped = policy.maxDelay.map {
+            min(jittered, Double($0))
+        } ?? jittered
+        return Int(min(max(capped, 0), Double(Int.max)))
     }
 
     private func parseRetryAfter(_ value: String?) -> Int? {
@@ -1674,7 +1681,9 @@ private final class FetchClient: NSObject,
         ), !text.isEmpty else { return nil }
 
         if let seconds = Int(text) {
-            return max(seconds, 0) * 1000
+            return max(seconds, 0) > Int.max / 1000
+                ? Int.max
+                : max(seconds, 0) * 1000
         }
 
         let formatter = DateFormatter()
