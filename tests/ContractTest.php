@@ -126,3 +126,15 @@ it('keeps every manifest bridge registered in native code and JavaScript', funct
             ->and($javascript)->toContain($bridge['name']);
     }
 });
+
+it('distinguishes Android call timeouts from explicit cancellation', function () {
+    $android = file_get_contents(
+        dirname(__DIR__) . '/resources/android/src/FetchFunctions.kt'
+    );
+
+    expect($android)
+        ->toContain('if (operation.cancelled)')
+        ->toContain('val cancelled = state.cancelled')
+        ->not->toContain('if (call.isCanceled() || operation.cancelled)')
+        ->not->toContain('val cancelled = call?.isCanceled() == true || state.cancelled');
+});

@@ -183,12 +183,13 @@ private object FetchClient {
 
         val call = client.newCall(request)
         operation.call = call
-        operation.call = call
         calls[operation.requestId] = call
 
         call.enqueue(object : Callback {
             override fun onFailure(call: Call, exception: IOException) {
-                if (call.isCanceled() || operation.cancelled) {
+                // OkHttp also marks a call as canceled when its call timeout fires.
+                // Only our logical flag proves that Fetch.Cancel was requested.
+                if (operation.cancelled) {
                     finishRetryCancelled(activity, operation)
                     return
                 }
@@ -740,7 +741,7 @@ private object FetchClient {
         state: DownloadState,
         exception: Exception,
     ) {
-        val cancelled = call?.isCanceled() == true || state.cancelled
+        val cancelled = state.cancelled
         val fileException = exception as? DownloadFileException
 
         finishDownload(
@@ -773,7 +774,7 @@ private object FetchClient {
 
         cleanupDownload(call, state, removePartial = true)
 
-        if (cancelled || state.cancelled || call?.isCanceled() == true) {
+        if (cancelled || state.cancelled) {
             emitCancelled(activity, state.requestId)
         } else {
             emitFailure(
