@@ -10,7 +10,7 @@ composer require victorycodedev/nativephp-fetch
 php artisan native:plugin:register victorycodedev/nativephp-fetch
 ```
 
-## Requests and uploads
+## Usage (PHP)
 
 ```php
 use Victorycodedev\NativephpFetch\Facades\Fetch;
@@ -412,7 +412,7 @@ Fetch::cancel($requestId);
 Cancelled and failed downloads remove Fetch-owned partial files and never
 replace the final destination.
 
-## JavaScript usage
+## Usage (JavaScript)
 
 Fetch includes an official JavaScript client for NativePHP v4 applications
 using Inertia with Vue/React or a legacy web-view frontend. The PHP facade

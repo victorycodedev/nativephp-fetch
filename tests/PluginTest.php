@@ -179,6 +179,16 @@ describe('Documentation', function () {
         expect($readme)->toContain('<native:button', '#[On(FetchRequestCompleted::class)]')
             ->and($boost)->toContain('Never use it', 'queued jobs', 'Laravel\'s `Http` facade');
     });
+
+    it('uses the NativePHP marketplace required README headings', function () {
+        $readme = file_get_contents($this->pluginPath . '/README.md');
+
+        expect($readme)->toContain(
+            '## Installation',
+            '## Usage (PHP)',
+            '## Usage (JavaScript)',
+        );
+    });
 });
 
 describe('Composer Configuration', function () {
