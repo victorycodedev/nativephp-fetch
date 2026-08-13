@@ -3,46 +3,52 @@
     "version": "1.0.0",
     "description": "Truly asynchronous native HTTP networking for NativePHP Mobile on iOS and Android.",
     "namespace": "Fetch",
-    "keywords": [],
+    "keywords": [
+        "http",
+        "networking",
+        "async",
+        "nativephp",
+        "ios",
+        "android"
+    ],
     "category": "utilities",
     "license": "MIT",
     "pricing": {
         "type": "free"
     },
     "author": {
-        "name": "Your Name",
-        "email": "you@example.com",
+        "name": "Victory Efekpogua",
         "url": ""
     },
-    "homepage": "",
-    "repository": "",
-    "funding": [],
     "platforms": [
         "android",
         "ios"
     ],
     "icon": "resources/icon.png",
-    "screenshots": [],
     "bridge_functions": [
         {
-            "name": "Fetch.Execute",
-            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Execute",
-            "ios": "FetchFunctions.Execute",
-            "description": "Execute the plugin functionality"
+            "name": "Fetch.Start",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Start",
+            "ios": "FetchFunctions.Start",
+            "description": "Start an asynchronous native HTTP request"
         },
         {
-            "name": "Fetch.GetStatus",
-            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.GetStatus",
-            "ios": "FetchFunctions.GetStatus",
-            "description": "Get the current status"
+            "name": "Fetch.Cancel",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Cancel",
+            "ios": "FetchFunctions.Cancel",
+            "description": "Cancel an active asynchronous HTTP request"
         }
     ],
     "android": {
-        "min_version": 21,
-        "permissions": [],
+        "min_version": 29,
+        "permissions": [
+            "android.permission.INTERNET"
+        ],
         "repositories": [],
         "dependencies": {
-            "implementation": []
+            "implementation": [
+                "com.squareup.okhttp3:okhttp:4.12.0"
+            ]
         },
         "activities": [],
         "services": [],
@@ -50,7 +56,7 @@
         "providers": []
     },
     "ios": {
-        "min_version": "15.0",
+        "min_version": "18.0",
         "permissions": [],
         "repositories": [],
         "dependencies": {
@@ -64,7 +70,11 @@
     },
     "secrets": [],
     "events": [
-        "Victorycodedev\\NativephpFetch\\Events\\FetchCompleted"
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestStarted",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCompleted",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestFailed",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCancelled",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress"
     ],
     "service_provider": "Victorycodedev\\NativephpFetch\\FetchServiceProvider",
     "hooks": {

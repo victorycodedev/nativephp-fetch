@@ -3,10 +3,24 @@
 namespace Victorycodedev\NativephpFetch\Facades;
 
 use Illuminate\Support\Facades\Facade;
+use Victorycodedev\NativephpFetch\PendingRequest;
 
 /**
- * @method static mixed execute(array $options = [])
- * @method static object|null getStatus()
+ * @method static PendingRequest request()
+ * @method static PendingRequest withHeaders(array $headers)
+ * @method static PendingRequest withHeader(string $name, string $value)
+ * @method static PendingRequest withToken(string $token, string $type = 'Bearer')
+ * @method static PendingRequest acceptJson()
+ * @method static PendingRequest asJson()
+ * @method static PendingRequest timeout(int $seconds)
+ * @method static PendingRequest attach(string $name, string $path, ?string $filename = null, ?string $mimeType = null)
+ * @method static PendingRequest attachMany(array $attachments)
+ * @method static string get(string $url, array $query = [])
+ * @method static string post(string $url, array $data = [])
+ * @method static string put(string $url, array $data = [])
+ * @method static string patch(string $url, array $data = [])
+ * @method static string delete(string $url, array $data = [])
+ * @method static bool cancel(string $requestId)
  *
  * @see \Victorycodedev\NativephpFetch\Fetch
  */

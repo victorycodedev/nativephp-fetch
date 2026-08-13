@@ -4,37 +4,99 @@ namespace Victorycodedev\NativephpFetch;
 
 class Fetch
 {
-    /**
-     * Execute the plugin functionality
-     */
-    public function execute(array $options = []): mixed
+    public function request(): PendingRequest
     {
-        if (function_exists('nativephp_call')) {
-            $result = nativephp_call('Fetch.Execute', json_encode($options));
-
-            if ($result) {
-                $decoded = json_decode($result);
-                return $decoded->data ?? null;
-            }
-        }
-
-        return null;
+        return new PendingRequest();
     }
 
-    /**
-     * Get the current status
-     */
-    public function getStatus(): ?object
+    public function withHeaders(array $headers): PendingRequest
     {
-        if (function_exists('nativephp_call')) {
-            $result = nativephp_call('Fetch.GetStatus', '{}');
+        return $this->request()->withHeaders($headers);
+    }
 
-            if ($result) {
-                $decoded = json_decode($result);
-                return $decoded->data ?? null;
-            }
-        }
+    public function withHeader(string $name, string $value): PendingRequest
+    {
+        return $this->request()->withHeader($name, $value);
+    }
 
-        return null;
+    public function withToken(
+        string $token,
+        string $type = 'Bearer',
+    ): PendingRequest {
+        return $this->request()->withToken($token, $type);
+    }
+
+    public function acceptJson(): PendingRequest
+    {
+        return $this->request()->acceptJson();
+    }
+
+    public function asJson(): PendingRequest
+    {
+        return $this->request()->asJson();
+    }
+
+    public function timeout(int $seconds): PendingRequest
+    {
+        return $this->request()->timeout($seconds);
+    }
+
+    public function attach(
+        string $name,
+        string $path,
+        ?string $filename = null,
+        ?string $mimeType = null,
+    ): PendingRequest {
+        return $this->request()->attach(
+            $name,
+            $path,
+            $filename,
+            $mimeType,
+        );
+    }
+
+    public function attachMany(array $attachments): PendingRequest
+    {
+        return $this->request()->attachMany($attachments);
+    }
+
+    public function get(
+        string $url,
+        array $query = [],
+    ): string {
+        return $this->request()->get($url, $query);
+    }
+
+    public function post(
+        string $url,
+        array $data = [],
+    ): string {
+        return $this->request()->post($url, $data);
+    }
+
+    public function put(
+        string $url,
+        array $data = [],
+    ): string {
+        return $this->request()->put($url, $data);
+    }
+
+    public function patch(
+        string $url,
+        array $data = [],
+    ): string {
+        return $this->request()->patch($url, $data);
+    }
+
+    public function delete(
+        string $url,
+        array $data = [],
+    ): string {
+        return $this->request()->delete($url, $data);
+    }
+
+    public function cancel(string $requestId): bool
+    {
+        return $this->request()->cancel($requestId);
     }
 }

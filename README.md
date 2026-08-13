@@ -13,12 +13,35 @@ composer require victorycodedev/nativephp-fetch
 ```php
 use Victorycodedev\NativephpFetch\Facades\Fetch;
 
-// Execute functionality
-$result = Fetch::execute(['option1' => 'value']);
+$request = Fetch::acceptJson()
+    ->attachMany([
+        [
+            'name' => 'photos[]',
+            'path' => $pathOne,
+            'filename' => 'one.jpg',
+            'mimeType' => 'image/jpeg',
+        ],
+        [
+            'name' => 'photos[]',
+            'path' => $pathTwo,
+            'filename' => 'two.jpg',
+            'mimeType' => 'image/jpeg',
+        ],
+        [
+            'name' => 'document',
+            'path' => $pdfPath,
+            'filename' => 'invoice.pdf',
+            'mimeType' => 'application/pdf',
+        ],
+    ]);
 
-// Get status
-$status = Fetch::getStatus();
+$request->post('https://api.example.com/upload', [
+    'title' => 'My upload',
+]);
 ```
+
+`attachMany()` is a convenience wrapper around `attach()`. Upload progress is
+reported for the complete multipart request, including all files and fields.
 
 ## Listening for Events
 
