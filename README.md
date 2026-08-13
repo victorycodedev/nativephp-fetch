@@ -407,12 +407,12 @@ emulators, and physical iOS/Android devices. Report issues through the
 - Multiple simultaneous downloads are supported and correlated by request ID.
 - Concurrent downloads cannot target the same destination.
 - Destination parent directories are created when possible.
-- V1 supports application-writable, app-sandbox destinations only. It does not
+- Fetch supports application-writable, app-sandbox destinations only. It does not
   request broad or legacy storage permissions.
 - Use NativePHP or platform sharing APIs separately to export an app-private
   download.
 - Downloads are foreground/application-lifecycle operations. Background and
-  resumable downloads are not part of V1.
+  resumable downloads are not part.
 - Progress and completion listeners require a live NativeComponent when using
   the event-driven UI API. Fetch does not persist events or post background
   notifications.
