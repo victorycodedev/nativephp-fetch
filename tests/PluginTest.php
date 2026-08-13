@@ -167,6 +167,20 @@ describe('PHP Classes', function () {
     });
 });
 
+describe('Documentation', function () {
+    it('documents common methods NativeComponents and queued job limitations', function () {
+        $readme = file_get_contents($this->pluginPath . '/README.md');
+        $boost = file_get_contents($this->pluginPath . '/resources/boost/guidelines/core.blade.php');
+
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'NativeComponent', 'queued jobs', 'Laravel\'s normal HTTP client'] as $term) {
+            expect($readme)->toContain($term);
+        }
+
+        expect($readme)->toContain('<native:button', '#[On(FetchRequestCompleted::class)]')
+            ->and($boost)->toContain('Never use it', 'queued jobs', 'Laravel\'s `Http` facade');
+    });
+});
+
 describe('Composer Configuration', function () {
     it('has valid composer.json', function () {
         $composerPath = $this->pluginPath . '/composer.json';

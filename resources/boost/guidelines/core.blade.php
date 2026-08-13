@@ -11,6 +11,11 @@ Public fluent methods are `request`, `withHeaders`, `withHeader`, `withToken`,
 `download`, and `cancel`; they return a stable request ID (except `cancel`,
 which returns a boolean), never a synchronous HTTP response.
 
+Fetch requires a running NativePHP mobile app and native bridge. Never use it
+inside Laravel queued jobs, scheduled commands, CLI/server workers, or other
+background PHP processes. Use Laravel's `Http` facade there. Fetch events also
+require a live NativeComponent; Fetch V1 is not a background-transfer service.
+
 @verbatim
     <code-snippet name="Using Fetch" lang="php">
         use Victorycodedev\NativephpFetch\Facades\Fetch;
@@ -20,6 +25,28 @@ which returns a boolean), never a synchronous HTTP response.
         ->post($url, ['name' => 'Victory']);
     </code-snippet>
 @endverbatim
+
+Common calls:
+
+@verbatim
+    <code-snippet name="Common Fetch requests" lang="php">
+        Fetch::acceptJson()->get($url, ['page' => 2]);
+        Fetch::acceptJson()->asJson()->post($url, ['name' => 'Victory']);
+        Fetch::acceptJson()->asJson()->put("{$url}/{$id}", $replacement);
+        Fetch::acceptJson()->asJson()->patch("{$url}/{$id}", ['active' => true]);
+        Fetch::acceptJson()->delete("{$url}/{$id}");
+        Fetch::withHeaders(['X-App' => 'mobile'])
+            ->withToken($token)
+            ->get($url);
+    </code-snippet>
+@endverbatim
+
+In a NativeComponent, create the pending request, assign `$request->id()` to
+component state, then call the terminal method. Listen with `#[On(...)]`,
+ignore events whose `requestId` does not match, and clear loading state on
+completed, failed, and cancelled events. Blade buttons call component methods
+with `@press="method"` and should use `:disabled="$loading"` to prevent
+accidental duplicate requests.
 
 Use `Fetch::asForm()->post($url, $data)` for URL-encoded forms and
 `Fetch::withBody($text, 'application/xml')->post($url)` for reasonably sized

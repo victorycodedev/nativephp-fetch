@@ -28,6 +28,58 @@ Fetch supports GET, POST, PUT, PATCH, DELETE, headers, bearer tokens, query
 parameters, JSON, form and raw bodies, cancellation, multipart fields, `attach()`,
 `attachMany()`, multiple files, and overall upload progress.
 
+### Common request examples
+
+Every request starts asynchronously and returns its stable request ID.
+
+```php
+// GET with query parameters (list values become repeated query keys).
+$requestId = Fetch::acceptJson()->get('https://api.example.com/tasks', [
+    'completed' => 'false',
+    'limit' => 10,
+    'tag' => ['php', 'mobile'],
+]);
+
+// POST JSON. JSON is already the default for non-empty method data;
+// asJson() is useful when you want the Content-Type header set explicitly.
+$requestId = Fetch::acceptJson()->asJson()->post(
+    'https://api.example.com/tasks',
+    ['title' => 'Ship Fetch', 'completed' => false],
+);
+
+// PUT replaces a resource.
+$requestId = Fetch::acceptJson()->asJson()->put(
+    "https://api.example.com/tasks/{$taskId}",
+    ['title' => 'Replacement title', 'completed' => true],
+);
+
+// PATCH updates selected fields.
+$requestId = Fetch::acceptJson()->asJson()->patch(
+    "https://api.example.com/tasks/{$taskId}",
+    ['completed' => true],
+);
+
+// DELETE, optionally with a JSON body.
+$requestId = Fetch::acceptJson()->delete(
+    "https://api.example.com/tasks/{$taskId}",
+);
+
+// Custom headers and bearer authentication.
+$requestId = Fetch::withHeaders([
+    'X-App-Version' => '1.0.0',
+    'X-Request-Source' => 'mobile',
+])->withToken($token)->acceptJson()->get('https://api.example.com/me');
+```
+
+When UI state needs the ID before a fast native event can arrive, create and
+track the pending request first:
+
+```php
+$request = Fetch::acceptJson()->timeout(15);
+$this->requestId = $request->id();
+$request->get('https://api.example.com/tasks');
+```
+
 ```php
 $requestId = Fetch::attachMany([
     [
@@ -95,6 +147,115 @@ public function completed(string $requestId, int $status, array $headers, string
 `json()` returns `null` for invalid/empty JSON, or the supplied default when a
 key is requested. Downloads retain their specialized completion event rather
 than pretending to be ordinary in-memory responses.
+
+### NativeComponent and Blade example
+
+```php
+use Native\Mobile\Attributes\On;
+use Native\Mobile\Edge\NativeComponent;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
+use Victorycodedev\NativephpFetch\Events\FetchRequestFailed;
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+use Victorycodedev\NativephpFetch\FetchResponse;
+
+class TasksScreen extends NativeComponent
+{
+    public bool $loading = false;
+    public ?string $requestId = null;
+    public array $tasks = [];
+    public ?string $error = null;
+
+    public function loadTasks(): void
+    {
+        $this->loading = true;
+        $this->error = null;
+
+        $request = Fetch::withToken(config('services.api.token'))->acceptJson()->timeout(15);
+        $this->requestId = $request->id();
+        $request->get('https://api.example.com/tasks', ['limit' => 20]);
+    }
+
+    #[On(FetchRequestCompleted::class)]
+    public function completed(string $requestId, int $status, array $headers, string $body): void
+    {
+        if ($requestId !== $this->requestId) return;
+
+        $response = FetchResponse::from($requestId, $status, $headers, $body);
+        $this->loading = false;
+
+        if ($response->successful()) {
+            $this->tasks = $response->json('data', []);
+        } else {
+            $this->error = "Request failed with HTTP {$response->status()}";
+        }
+    }
+
+    #[On(FetchRequestFailed::class)]
+    public function failed(string $requestId, string $message, ?string $code = null): void
+    {
+        if ($requestId !== $this->requestId) return;
+        $this->loading = false;
+        $this->error = $message;
+    }
+}
+```
+
+```blade
+<native:column class="gap-4 p-5">
+    <native:button
+        label="Load tasks"
+        :disabled="$loading"
+        @press="loadTasks"
+    />
+
+    @if ($loading)
+        <native:text>Loading…</native:text>
+        <native:button label="Cancel" @press="cancelRequest" />
+    @endif
+
+    @if ($error)
+        <native:text class="text-red-500">{{ $error }}</native:text>
+    @endif
+
+    @foreach ($tasks as $task)
+        <native:text>{{ $task['title'] }}</native:text>
+    @endforeach
+</native:column>
+```
+
+The component should implement `cancelRequest()` with
+`Fetch::cancel($this->requestId)` when the ID is present.
+
+## Runtime scope: do not use Fetch in queued jobs
+
+Fetch is for requests initiated while a NativePHP mobile application and its
+native bridge are running. It is not intended for Laravel queued jobs,
+scheduled commands, server workers, CLI processes, or other background PHP
+contexts. Those processes do not have the live iOS/Android bridge or a live
+NativeComponent to receive Fetch events.
+
+Use Laravel's normal HTTP client in a queued job:
+
+```php
+use Illuminate\Support\Facades\Http;
+
+class SynchronizeAccount implements ShouldQueue
+{
+    public function handle(): void
+    {
+        $response = Http::withToken($this->token)
+            ->timeout(30)
+            ->retry(3, 500)
+            ->get('https://api.example.com/account');
+
+        $response->throw();
+    }
+}
+```
+
+If a native request must continue independently after the app is suspended or
+terminated, Fetch V1 is also not the correct tool; use an appropriate native
+background-transfer solution.
 
 ## Downloads
 
