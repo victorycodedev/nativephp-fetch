@@ -29,7 +29,7 @@
         }
     },
     "require-dev": {
-        "pestphp/pest": "^3.0"
+        "pestphp/pest": "^4.0"
     },
     "scripts": {
         "test": "pest"

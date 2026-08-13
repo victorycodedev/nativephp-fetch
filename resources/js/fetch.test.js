@@ -3,11 +3,12 @@ import test from 'node:test';
 import Fetch, { PendingRequest } from './fetch.js';
 
 const calls = [];
+let bridgeResponse;
 
 globalThis.fetch = async (_url, options) => {
     calls.push(JSON.parse(options.body));
 
-    return {
+    return bridgeResponse || {
         ok: true,
         json: async () => ({
             data: {
@@ -18,7 +19,10 @@ globalThis.fetch = async (_url, options) => {
     };
 };
 
-test.beforeEach(() => calls.splice(0));
+test.beforeEach(() => {
+    calls.splice(0);
+    bridgeResponse = null;
+});
 
 test('supports GET and all body methods', async () => {
     await Fetch.get('https://example.test', { page: 2 });
@@ -120,4 +124,143 @@ test('validates retry policies', () => {
     assert.throws(() => Fetch.retry({ multiplier: 0.5 }), /multiplier/);
     assert.throws(() => Fetch.retry({ delay: 500, maxDelay: 100 }), /maxDelay/);
     assert.throws(() => Fetch.retry({ statuses: [99] }), /statuses/);
+});
+
+test('forwards every fluent configuration and JSON body default', async () => {
+    await Fetch.withHeaders({ 'X-Number': 42 })
+        .withHeader('X-Custom', 'yes')
+        .withToken('secret', 'Token')
+        .acceptJson()
+        .asJson()
+        .timeout(45)
+        .post('https://example.test', { enabled: true });
+
+    const payload = calls[0].params;
+    assert.deepEqual(payload.headers, {
+        'X-Number': '42',
+        'X-Custom': 'yes',
+        Authorization: 'Token secret',
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+    });
+    assert.equal(payload.timeout, 45);
+    assert.deepEqual(payload.body, {
+        type: 'json',
+        data: { enabled: true },
+    });
+});
+
+test('normalizes multipart fields and removes caller content type', async () => {
+    await Fetch.withHeader('content-TYPE', 'application/json')
+        .attach('file', '/app/file.txt')
+        .post('https://example.test', {
+            truthy: true,
+            falsey: false,
+            nothing: null,
+            nested: { value: 1 },
+            number: 12,
+        });
+
+    const payload = calls[0].params;
+    assert.equal(payload.headers['content-TYPE'], undefined);
+    assert.deepEqual(payload.body.fields, {
+        truthy: 'true',
+        falsey: 'false',
+        nothing: '',
+        nested: '{"value":1}',
+        number: '12',
+    });
+    assert.deepEqual(payload.body.files[0], {
+        field: 'file',
+        path: '/app/file.txt',
+        filename: 'file.txt',
+        mime_type: 'application/octet-stream',
+    });
+});
+
+test('uses null bodies for empty requests and forwards GET query', async () => {
+    await Fetch.get('https://example.test', { page: 2 });
+    await Fetch.post('https://example.test');
+
+    assert.deepEqual(calls[0].params.query, { page: 2 });
+    assert.equal(calls[0].params.body, null);
+    assert.equal(calls[1].params.body, null);
+});
+
+test('validates timeout attachments GET and download destination', () => {
+    assert.throws(() => Fetch.timeout(0), /timeout/);
+    assert.throws(() => Fetch.attach('', '/app/a'), /name/);
+    assert.throws(() => Fetch.attach('file', ''), /path/);
+    assert.throws(() => Fetch.attachMany('bad'), /array/);
+    assert.throws(() => Fetch.attachMany([null]), /object/);
+    assert.throws(() => Fetch.attachMany([{ name: 'file' }]), /name and path/);
+    assert.throws(
+        () => Fetch.attach('file', '/app/a').get('https://example.test'),
+        /cannot be sent with GET/,
+    );
+    assert.throws(
+        () => Fetch.download('https://example.test', ' '),
+        /destination/,
+    );
+});
+
+test('keeps attachMany validation atomic', () => {
+    const request = new PendingRequest('id');
+
+    assert.throws(() => request.attachMany([
+        { name: 'first', path: '/app/first' },
+        { name: 'second' },
+    ]));
+    assert.equal(request.attachments.length, 0);
+});
+
+test('unwraps native bridge response formats', async () => {
+    bridgeResponse = {
+        ok: true,
+        json: async () => ({ data: { data: { value: 42 } } }),
+    };
+
+    const response = await Fetch.start({ test: true });
+    assert.deepEqual(response, { value: 42 });
+});
+
+test('throws useful errors for HTTP and bridge failures', async () => {
+    bridgeResponse = {
+        ok: false,
+        status: 503,
+        json: async () => ({}),
+    };
+    await assert.rejects(() => Fetch.start(), /HTTP 503/);
+
+    bridgeResponse = {
+        ok: true,
+        json: async () => ({ status: 'error', code: 'outer', message: 'Outer failure' }),
+    };
+    await assert.rejects(
+        () => Fetch.start(),
+        (error) => error.message === 'Outer failure' && error.code === 'outer',
+    );
+
+    bridgeResponse = {
+        ok: true,
+        json: async () => ({
+            data: { status: 'error', code: 'inner', message: 'Inner failure' },
+        }),
+    };
+    await assert.rejects(
+        () => Fetch.start(),
+        (error) => error.message === 'Inner failure' && error.code === 'inner',
+    );
+});
+
+test('exports independent request builders and direct helpers', () => {
+    const first = Fetch.request();
+    const second = Fetch.request();
+
+    first.withHeader('X-First', 'yes');
+    assert.notEqual(first.id(), second.id());
+    assert.equal(second.headers['X-First'], undefined);
+    assert.equal(Fetch.acceptJson().headers.Accept, 'application/json');
+    assert.equal(Fetch.asJson().headers['Content-Type'], 'application/json');
+    assert.equal(Fetch.attachMany([]).attachments.length, 0);
 });
