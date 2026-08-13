@@ -625,22 +625,20 @@ private class ProgressRequestBody(
 
         val bufferedSink = forwardingSink.buffer()
 
-        try {
-            delegate.writeTo(bufferedSink)
-            bufferedSink.flush()
-        } finally {
-            val finalTotal =
-                if (totalBytes > 0L) totalBytes else bytesWritten
+        delegate.writeTo(bufferedSink)
+        bufferedSink.flush()
 
-            val finalSent =
-                if (totalBytes > 0L) {
-                    totalBytes
-                } else {
-                    bytesWritten
-                }
+        val finalTotal =
+            if (totalBytes > 0L) totalBytes else bytesWritten
 
-            onProgress(finalSent, finalTotal)
-        }
+        val finalSent =
+            if (totalBytes > 0L) {
+                totalBytes
+            } else {
+                bytesWritten
+            }
+
+        onProgress(finalSent, finalTotal)
     }
 }
 

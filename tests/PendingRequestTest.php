@@ -12,6 +12,12 @@ it('attaches multiple files', function () {
             'mimeType' => 'image/jpeg',
         ],
         [
+            'name' => 'photos[]',
+            'path' => '/tmp/two.jpg',
+            'filename' => 'two.jpg',
+            'mimeType' => 'image/jpeg',
+        ],
+        [
             'name' => 'document',
             'path' => '/tmp/invoice.pdf',
         ],
@@ -24,6 +30,12 @@ it('attaches multiple files', function () {
             'field' => 'photos[]',
             'path' => '/tmp/one.jpg',
             'filename' => 'one.jpg',
+            'mime_type' => 'image/jpeg',
+        ],
+        [
+            'field' => 'photos[]',
+            'path' => '/tmp/two.jpg',
+            'filename' => 'two.jpg',
             'mime_type' => 'image/jpeg',
         ],
         [
