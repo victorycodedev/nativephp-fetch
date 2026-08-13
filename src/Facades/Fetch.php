@@ -13,6 +13,7 @@ use Victorycodedev\NativephpFetch\PendingRequest;
  * @method static PendingRequest acceptJson()
  * @method static PendingRequest asJson()
  * @method static PendingRequest timeout(int $seconds)
+ * @method static PendingRequest retry(int $times = 3, int $delay = 500, float $multiplier = 2.0, ?int $maxDelay = 30000, array $statuses = [])
  * @method static PendingRequest attach(string $name, string $path, ?string $filename = null, ?string $mimeType = null)
  * @method static PendingRequest attachMany(array $attachments)
  * @method static string get(string $url, array $query = [])

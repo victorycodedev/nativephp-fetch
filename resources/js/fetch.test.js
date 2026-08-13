@@ -79,3 +79,45 @@ test('builds downloads and cancellation with a pre-existing ID', async () => {
         params: { request_id: 'download-id' },
     });
 });
+
+test('passes default and custom retry policies to native requests', async () => {
+    await Fetch.retry().get('https://example.test');
+    await Fetch.retry({
+        times: 4,
+        delay: 250,
+        multiplier: 1.5,
+        maxDelay: 5000,
+        statuses: [409, 425],
+    }).post('https://example.test', { value: 1 });
+
+    assert.deepEqual(calls[0].params.retry, {
+        times: 3,
+        delay: 500,
+        multiplier: 2,
+        max_delay: 30000,
+        statuses: [],
+    });
+    assert.deepEqual(calls[1].params.retry, {
+        times: 4,
+        delay: 250,
+        multiplier: 1.5,
+        max_delay: 5000,
+        statuses: [409, 425],
+    });
+});
+
+test('passes retry to downloads without leaking into new requests', async () => {
+    await Fetch.retry(2).download('https://example.test/file', '/app/file');
+    await Fetch.get('https://example.test/plain');
+
+    assert.equal(calls[0].params.retry.times, 2);
+    assert.equal(calls[1].params.retry, null);
+});
+
+test('validates retry policies', () => {
+    assert.throws(() => Fetch.retry(-1), /times/);
+    assert.throws(() => Fetch.retry({ delay: -1 }), /delay/);
+    assert.throws(() => Fetch.retry({ multiplier: 0.5 }), /multiplier/);
+    assert.throws(() => Fetch.retry({ delay: 500, maxDelay: 100 }), /maxDelay/);
+    assert.throws(() => Fetch.retry({ statuses: [99] }), /statuses/);
+});

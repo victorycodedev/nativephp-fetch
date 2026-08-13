@@ -27,6 +27,9 @@ private final class FetchClient: NSObject,
     private static let eventDownloadCompleted =
         "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
 
+    private static let eventRetrying =
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
+
     private let lock = NSLock()
 
     private var tasks: [String: URLSessionTask] = [:]
@@ -40,6 +43,8 @@ private final class FetchClient: NSObject,
     private var downloads: [String: DownloadState] = [:]
 
     private var activeDownloadDestinations: [String: String] = [:]
+
+    private var retryOperations: [String: StandardRetryState] = [:]
 
     private lazy var session: URLSession = {
         URLSession(
@@ -60,7 +65,8 @@ private final class FetchClient: NSObject,
         headers: [String: String],
         query: [String: Any],
         body: [String: Any]?,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        retryPolicy: RetryPolicy?
     ) throws {
 
         guard var components = URLComponents(string: urlString) else {
@@ -145,23 +151,13 @@ private final class FetchClient: NSObject,
                 forHTTPHeaderField: "Content-Type"
             )
 
-            let task = session.uploadTask(
-                with: request,
-                fromFile: multipart.fileURL
-            ) { [weak self] data, response, error in
-                self?.handleCompletion(
-                    requestId: requestId,
-                    data: data,
-                    response: response,
-                    error: error
-                )
-            }
-
-            storeTask(
-                task,
+            let state = StandardRetryState(
                 requestId: requestId,
-                temporaryUploadFile: multipart.fileURL
+                request: request,
+                uploadFile: multipart.fileURL,
+                policy: retryPolicy
             )
+            retryOperations[requestId] = state
 
             emitStarted(
                 requestId: requestId,
@@ -169,7 +165,7 @@ private final class FetchClient: NSObject,
                 url: url.absoluteString
             )
 
-            task.resume()
+            startStandardAttempt(state)
 
             return
         }
@@ -181,22 +177,13 @@ private final class FetchClient: NSObject,
             )
         }
 
-        let task = session.dataTask(
-            with: request
-        ) { [weak self] data, response, error in
-
-            self?.handleCompletion(
-                requestId: requestId,
-                data: data,
-                response: response,
-                error: error
-            )
-        }
-
-        storeTask(
-            task,
-            requestId: requestId
+        let state = StandardRetryState(
+            requestId: requestId,
+            request: request,
+            uploadFile: nil,
+            policy: retryPolicy
         )
+        retryOperations[requestId] = state
 
         emitStarted(
             requestId: requestId,
@@ -204,6 +191,53 @@ private final class FetchClient: NSObject,
             url: url.absoluteString
         )
 
+        startStandardAttempt(state)
+    }
+
+    private func startStandardAttempt(_ state: StandardRetryState) {
+        lock.lock()
+        guard !state.cancelled, !state.terminal else {
+            lock.unlock()
+            return
+        }
+        state.attempt += 1
+        lock.unlock()
+
+        let completion: (Data?, URLResponse?, Error?) -> Void = {
+            [weak self, weak state] data, response, error in
+            guard let self, let state else { return }
+            self.handleStandardCompletion(
+                state: state,
+                data: data,
+                response: response,
+                error: error
+            )
+        }
+
+        let task: URLSessionTask
+        if let uploadFile = state.uploadFile {
+            task = session.uploadTask(
+                with: state.request,
+                fromFile: uploadFile,
+                completionHandler: completion
+            )
+        } else {
+            task = session.dataTask(
+                with: state.request,
+                completionHandler: completion
+            )
+        }
+
+        lock.lock()
+        guard !state.cancelled, !state.terminal else {
+            lock.unlock()
+            task.cancel()
+            return
+        }
+        state.task = task
+        tasks[state.requestId] = task
+        requestIdsByTaskIdentifier[task.taskIdentifier] = state.requestId
+        lock.unlock()
         task.resume()
     }
 
@@ -214,7 +248,8 @@ private final class FetchClient: NSObject,
         headers: [String: String],
         query: [String: Any],
         timeout: TimeInterval,
-        overwrite: Bool
+        overwrite: Bool,
+        retryPolicy: RetryPolicy?
     ) throws {
         guard !destinationPath.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -344,11 +379,15 @@ private final class FetchClient: NSObject,
             let task = session.downloadTask(with: request)
             let state = DownloadState(
                 requestId: requestId,
+                request: request,
                 destination: destination,
                 destinationKey: destinationKey,
                 partial: partial,
-                overwrite: overwrite
+                overwrite: overwrite,
+                policy: retryPolicy
             )
+            state.task = task
+            state.attempt = 1
 
             lock.lock()
             tasks[requestId] = task
@@ -389,23 +428,39 @@ private final class FetchClient: NSObject,
 
         let task =
             tasks[requestId]
+        let retryOperation = retryOperations[requestId]
+        let downloadState = downloads[requestId]
 
-        if let state = downloads[requestId] {
+        if let operation = retryOperation {
+            if operation.terminal {
+                lock.unlock()
+                return false
+            }
+            operation.cancelled = true
+            operation.retryWorkItem?.cancel()
+        }
+
+        if let state = downloadState {
             if state.terminal {
                 lock.unlock()
                 return false
             }
 
             state.cancelled = true
+            state.retryWorkItem?.cancel()
         }
 
         lock.unlock()
 
-        guard let task else {
+        guard task != nil || retryOperation != nil || downloadState != nil else {
             return false
         }
 
-        task.cancel()
+        task?.cancel()
+
+        if let operation = retryOperation {
+            finishStandardCancelled(operation)
+        }
 
         return true
     }
@@ -545,6 +600,15 @@ private final class FetchClient: NSObject,
 
         guard (200...299).contains(response.statusCode) else {
             lock.unlock()
+            if state.policy?.statuses.contains(response.statusCode) == true,
+               scheduleDownloadRetry(
+                    state: state,
+                    reason: "http_status",
+                    status: response.statusCode,
+                    retryAfter: response.value(forHTTPHeaderField: "Retry-After")
+               ) {
+                return
+            }
             finishDownload(
                 requestId: requestId,
                 message: "Download failed with HTTP \(response.statusCode).",
@@ -647,6 +711,13 @@ private final class FetchClient: NSObject,
                     cancelled: true
                 )
             } else {
+                let reason = failureCode(urlError)
+                if isRetryableNetwork(reason), scheduleDownloadRetry(
+                    state: downloads[requestId],
+                    reason: reason
+                ) {
+                    return
+                }
                 finishDownload(
                     requestId: requestId,
                     message: urlError.localizedDescription,
@@ -654,6 +725,12 @@ private final class FetchClient: NSObject,
                 )
             }
         } else if let error {
+            if scheduleDownloadRetry(
+                state: downloads[requestId],
+                reason: "network_error"
+            ) {
+                return
+            }
             finishDownload(
                 requestId: requestId,
                 message: error.localizedDescription,
@@ -665,6 +742,187 @@ private final class FetchClient: NSObject,
                 message: "The download ended before its file was finalized.",
                 code: "network_error"
             )
+        }
+    }
+
+    private func handleStandardCompletion(
+        state: StandardRetryState,
+        data: Data?,
+        response: URLResponse?,
+        error: Error?
+    ) {
+        if state.cancelled {
+            finishStandardCancelled(state)
+            return
+        }
+
+        if let urlError = error as? URLError {
+            if urlError.code == .cancelled {
+                finishStandardCancelled(state)
+            } else {
+                let reason = failureCode(urlError)
+                if isRetryableNetwork(reason), scheduleStandardRetry(
+                    state: state,
+                    reason: reason
+                ) {
+                    return
+                }
+                finishStandardFailure(
+                    state,
+                    message: urlError.localizedDescription,
+                    code: reason
+                )
+            }
+            return
+        }
+
+        if let error {
+            if scheduleStandardRetry(
+                state: state,
+                reason: "network_error"
+            ) {
+                return
+            }
+            finishStandardFailure(
+                state,
+                message: error.localizedDescription,
+                code: "network_error"
+            )
+            return
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            finishStandardFailure(
+                state,
+                message: "The server returned an invalid HTTP response.",
+                code: "invalid_response"
+            )
+            return
+        }
+
+        if state.policy?.statuses.contains(httpResponse.statusCode) == true {
+            if scheduleStandardRetry(
+                state: state,
+                reason: "http_status",
+                status: httpResponse.statusCode,
+                retryAfter: httpResponse.value(
+                    forHTTPHeaderField: "Retry-After"
+                )
+            ) {
+                return
+            }
+            finishStandardFailure(
+                state,
+                message: "HTTP request failed with status \(httpResponse.statusCode).",
+                code: "http_error"
+            )
+            return
+        }
+
+        lock.lock()
+        guard !state.cancelled, !state.terminal else {
+            lock.unlock()
+            return
+        }
+        state.terminal = true
+        removeStandardStateLocked(state)
+        lock.unlock()
+
+        let body = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        emitCompleted(
+            requestId: state.requestId,
+            status: httpResponse.statusCode,
+            headers: responseHeaders(httpResponse),
+            body: body
+        )
+    }
+
+    private func scheduleStandardRetry(
+        state: StandardRetryState,
+        reason: String,
+        status: Int? = nil,
+        retryAfter: String? = nil
+    ) -> Bool {
+        lock.lock()
+        guard let policy = state.policy,
+              !state.cancelled,
+              !state.terminal,
+              state.attempt < policy.maxAttempts else {
+            lock.unlock()
+            return false
+        }
+
+        let delay = retryDelay(
+            policy: policy,
+            completedAttempt: state.attempt,
+            retryAfter: retryAfter
+        )
+        let nextAttempt = state.attempt + 1
+        let item = DispatchWorkItem { [weak self, weak state] in
+            guard let self, let state else { return }
+            self.startStandardAttempt(state)
+        }
+        state.retryWorkItem = item
+        if let task = state.task {
+            requestIdsByTaskIdentifier.removeValue(forKey: task.taskIdentifier)
+        }
+        tasks.removeValue(forKey: state.requestId)
+        lock.unlock()
+
+        emitRetrying(
+            requestId: state.requestId,
+            attempt: nextAttempt,
+            maxAttempts: policy.maxAttempts,
+            delayMs: delay,
+            reason: reason,
+            status: status
+        )
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + .milliseconds(delay),
+            execute: item
+        )
+        return true
+    }
+
+    private func finishStandardFailure(
+        _ state: StandardRetryState,
+        message: String,
+        code: String
+    ) {
+        lock.lock()
+        guard !state.terminal, !state.cancelled else {
+            lock.unlock()
+            return
+        }
+        state.terminal = true
+        removeStandardStateLocked(state)
+        lock.unlock()
+        emitFailure(requestId: state.requestId, message: message, code: code)
+    }
+
+    private func finishStandardCancelled(_ state: StandardRetryState) {
+        lock.lock()
+        guard !state.terminal else {
+            lock.unlock()
+            return
+        }
+        state.cancelled = true
+        state.terminal = true
+        state.retryWorkItem?.cancel()
+        removeStandardStateLocked(state)
+        lock.unlock()
+        emitCancelled(requestId: state.requestId)
+    }
+
+    private func removeStandardStateLocked(_ state: StandardRetryState) {
+        if let task = state.task {
+            requestIdsByTaskIdentifier.removeValue(forKey: task.taskIdentifier)
+        }
+        tasks.removeValue(forKey: state.requestId)
+        retryOperations.removeValue(forKey: state.requestId)
+        uploadProgressTimes.removeValue(forKey: state.requestId)
+        if let uploadFile = state.uploadFile {
+            try? FileManager.default.removeItem(at: uploadFile)
         }
     }
 
@@ -1130,6 +1388,69 @@ private final class FetchClient: NSObject,
         }
     }
 
+    private func scheduleDownloadRetry(
+        state: DownloadState?,
+        reason: String,
+        status: Int? = nil,
+        retryAfter: String? = nil
+    ) -> Bool {
+        guard let state else { return false }
+
+        lock.lock()
+        guard let policy = state.policy,
+              !state.cancelled,
+              !state.terminal,
+              state.attempt < policy.maxAttempts else {
+            lock.unlock()
+            return false
+        }
+
+        let delay = retryDelay(
+            policy: policy,
+            completedAttempt: state.attempt,
+            retryAfter: retryAfter
+        )
+        let nextAttempt = state.attempt + 1
+        state.attempt = nextAttempt
+        try? FileManager.default.removeItem(at: state.partial)
+
+        let item = DispatchWorkItem { [weak self, weak state] in
+            guard let self, let state else { return }
+            self.lock.lock()
+            guard !state.cancelled, !state.terminal else {
+                self.lock.unlock()
+                return
+            }
+            try? FileManager.default.removeItem(at: state.partial)
+            let task = self.session.downloadTask(with: state.request)
+            state.task = task
+            self.tasks[state.requestId] = task
+            self.requestIdsByTaskIdentifier[task.taskIdentifier] = state.requestId
+            self.lock.unlock()
+            task.resume()
+        }
+        state.retryWorkItem = item
+        if let task = state.task {
+            requestIdsByTaskIdentifier.removeValue(forKey: task.taskIdentifier)
+        }
+        tasks.removeValue(forKey: state.requestId)
+        lock.unlock()
+
+        emitRetrying(
+            requestId: state.requestId,
+            attempt: nextAttempt,
+            maxAttempts: policy.maxAttempts,
+            delayMs: delay,
+            reason: reason,
+            status: status
+        )
+        DispatchQueue.global(qos: .utility).asyncAfter(
+            deadline: .now() + .milliseconds(delay),
+            execute: item
+        )
+        return true
+    }
+
     private func removeDownloadStateLocked(
         requestId: String,
         taskIdentifier: Int?,
@@ -1305,6 +1626,75 @@ private final class FetchClient: NSObject,
         )
     }
 
+    private func emitRetrying(
+        requestId: String,
+        attempt: Int,
+        maxAttempts: Int,
+        delayMs: Int,
+        reason: String,
+        status: Int?
+    ) {
+        dispatchEvent(
+            name: Self.eventRetrying,
+            payload: [
+                "requestId": requestId,
+                "attempt": attempt,
+                "maxAttempts": maxAttempts,
+                "delayMs": delayMs,
+                "reason": reason,
+                "status": status.map { $0 } ?? NSNull(),
+            ]
+        )
+    }
+
+    private func retryDelay(
+        policy: RetryPolicy,
+        completedAttempt: Int,
+        retryAfter: String?
+    ) -> Int {
+        let exponent = max(completedAttempt - 1, 0)
+        let calculated = Double(policy.delay) * pow(
+            policy.multiplier,
+            Double(exponent)
+        )
+        let headerDelay = parseRetryAfter(retryAfter)
+        var delay = headerDelay ?? Int(
+            min(calculated, Double(Int.max))
+        )
+        if let maxDelay = policy.maxDelay {
+            delay = min(delay, maxDelay)
+        }
+        let jittered = Double(max(delay, 0)) * Double.random(in: 0.8...1.2)
+        return Int(min(max(jittered, 0), Double(Int.max)))
+    }
+
+    private func parseRetryAfter(_ value: String?) -> Int? {
+        guard let text = value?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !text.isEmpty else { return nil }
+
+        if let seconds = Int(text) {
+            return max(seconds, 0) * 1000
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE',' dd MMM yyyy HH':'mm':'ss z"
+        guard let date = formatter.date(from: text) else { return nil }
+        return max(Int(date.timeIntervalSinceNow * 1000), 0)
+    }
+
+    private func isRetryableNetwork(_ code: String) -> Bool {
+        [
+            "timeout",
+            "offline",
+            "dns_failure",
+            "connection_failed",
+            "network_error",
+        ].contains(code)
+    }
+
     private func dispatchEvent(
         name: String,
         payload: [String: Any]
@@ -1356,26 +1746,69 @@ private struct MultipartBuildResult {
 
 private final class DownloadState {
     let requestId: String
+    let request: URLRequest
     let destination: URL
     let destinationKey: String
     let partial: URL
     let overwrite: Bool
+    let policy: RetryPolicy?
     var cancelled = false
     var terminal = false
     var lastProgressAt: TimeInterval = 0
+    var attempt = 0
+    weak var task: URLSessionTask?
+    var retryWorkItem: DispatchWorkItem?
 
     init(
         requestId: String,
+        request: URLRequest,
         destination: URL,
         destinationKey: String,
         partial: URL,
-        overwrite: Bool
+        overwrite: Bool,
+        policy: RetryPolicy?
     ) {
         self.requestId = requestId
+        self.request = request
         self.destination = destination
         self.destinationKey = destinationKey
         self.partial = partial
         self.overwrite = overwrite
+        self.policy = policy
+    }
+}
+
+private struct RetryPolicy {
+    let times: Int
+    let delay: Int
+    let multiplier: Double
+    let maxDelay: Int?
+    let statuses: Set<Int>
+
+    var maxAttempts: Int { times + 1 }
+}
+
+private final class StandardRetryState {
+    let requestId: String
+    let request: URLRequest
+    let uploadFile: URL?
+    let policy: RetryPolicy?
+    var attempt = 0
+    var cancelled = false
+    var terminal = false
+    weak var task: URLSessionTask?
+    var retryWorkItem: DispatchWorkItem?
+
+    init(
+        requestId: String,
+        request: URLRequest,
+        uploadFile: URL?,
+        policy: RetryPolicy?
+    ) {
+        self.requestId = requestId
+        self.request = request
+        self.uploadFile = uploadFile
+        self.policy = policy
     }
 }
 
@@ -1387,6 +1820,24 @@ private enum FetchNativeError: Error {
     case fileNotFound(String)
     case multipartBuildFailed
     case download(code: String, message: String)
+}
+
+private func retryPolicy(from value: Any?) -> RetryPolicy? {
+    guard let retry = value as? [String: Any] else { return nil }
+    let defaults: Set<Int> = [408, 429, 500, 502, 503, 504]
+    let custom = Set(
+        (retry["statuses"] as? [Any] ?? []).compactMap {
+            ($0 as? NSNumber)?.intValue
+        }
+    )
+
+    return RetryPolicy(
+        times: (retry["times"] as? NSNumber)?.intValue ?? 3,
+        delay: (retry["delay"] as? NSNumber)?.intValue ?? 500,
+        multiplier: (retry["multiplier"] as? NSNumber)?.doubleValue ?? 2,
+        maxDelay: (retry["max_delay"] as? NSNumber)?.intValue,
+        statuses: custom.isEmpty ? defaults : custom
+    )
 }
 
 enum FetchFunctions {
@@ -1447,6 +1898,7 @@ enum FetchFunctions {
             let body =
                 parameters["body"]
                     as? [String: Any]
+            let retry = retryPolicy(from: parameters["retry"])
 
             do {
                 try FetchClient.shared.start(
@@ -1456,7 +1908,8 @@ enum FetchFunctions {
                     headers: headers,
                     query: query,
                     body: body,
-                    timeout: timeout
+                    timeout: timeout,
+                    retryPolicy: retry
                 )
 
                 return BridgeResponse.success(
@@ -1572,6 +2025,7 @@ enum FetchFunctions {
                 ?? 30
             let overwrite = parameters["overwrite"] as? Bool
                 ?? false
+            let retry = retryPolicy(from: parameters["retry"])
             let query = parameters["query"] as? [String: Any]
                 ?? [:]
             var headers: [String: String] = [:]
@@ -1590,7 +2044,8 @@ enum FetchFunctions {
                     headers: headers,
                     query: query,
                     timeout: timeout,
-                    overwrite: overwrite
+                    overwrite: overwrite,
+                    retryPolicy: retry
                 )
 
                 return BridgeResponse.success(

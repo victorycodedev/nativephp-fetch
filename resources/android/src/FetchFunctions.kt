@@ -32,8 +32,14 @@ import java.net.UnknownHostException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import kotlin.math.pow
+import kotlin.random.Random
 import javax.net.ssl.SSLException
 
 private fun bridgeMap(value: Any?): Map<String, Any>? =
@@ -70,6 +76,25 @@ private fun normalizeBridgeValue(value: Any?): Any? =
         else -> value
     }
 
+private fun bridgeRetryPolicy(value: Any?): RetryPolicy? {
+    val retry = bridgeMap(value) ?: return null
+    val defaults = setOf(408, 429, 500, 502, 503, 504)
+    val custom = bridgeList(retry["statuses"])
+        .mapNotNull { (it as? Number)?.toInt() }
+        .toSet()
+
+    return RetryPolicy(
+        times = (retry["times"] as? Number)?.toInt() ?: 3,
+        delay = (retry["delay"] as? Number)?.toLong() ?: 500L,
+        multiplier = (retry["multiplier"] as? Number)?.toDouble() ?: 2.0,
+        maxDelay = when (val value = retry["max_delay"]) {
+            is Number -> value.toLong()
+            else -> null
+        },
+        statuses = custom.ifEmpty { defaults },
+    )
+}
+
 private object FetchClient {
 
     private const val TAG = "NativePHPFetch"
@@ -95,6 +120,9 @@ private object FetchClient {
     private const val EVENT_DOWNLOAD_COMPLETED =
         "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
 
+    private const val EVENT_RETRYING =
+        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
+
     private val client = OkHttpClient.Builder()
         .retryOnConnectionFailure(false)
         .build()
@@ -105,6 +133,10 @@ private object FetchClient {
 
     private val activeDestinations = ConcurrentHashMap<String, String>()
 
+    private val retryOperations = ConcurrentHashMap<String, RetryOperation>()
+
+    private val retryScheduler = Executors.newSingleThreadScheduledExecutor()
+
     fun start(
         activity: FragmentActivity,
         requestId: String,
@@ -114,6 +146,7 @@ private object FetchClient {
         query: Map<String, Any>,
         body: Map<String, Any>?,
         timeoutSeconds: Long,
+        retryPolicy: RetryPolicy?,
     ) {
         val parsedUrl = url.toHttpUrlOrNull()
             ?: run {
@@ -214,9 +247,6 @@ private object FetchClient {
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
 
-        val call = timedClient.newCall(request)
-        calls[requestId] = call
-
         emitStarted(
             activity = activity,
             requestId = requestId,
@@ -224,66 +254,95 @@ private object FetchClient {
             url = request.url.toString(),
         )
 
-        call.enqueue(object : Callback {
-            override fun onFailure(
-                call: Call,
-                exception: IOException,
-            ) {
-                calls.remove(requestId)
+        val operation = RetryOperation(requestId, retryPolicy)
+        operation.activity = activity
+        retryOperations[requestId] = operation
+        enqueueStandardAttempt(activity, operation, timedClient, request)
+    }
 
-                if (call.isCanceled()) {
-                    emitCancelled(
-                        activity = activity,
-                        requestId = requestId,
-                    )
+    private fun enqueueStandardAttempt(
+        activity: FragmentActivity,
+        operation: RetryOperation,
+        client: OkHttpClient,
+        request: Request,
+    ) {
+        synchronized(operation) {
+            if (operation.cancelled || operation.terminal) return
+            operation.attempt++
+        }
+
+        val call = client.newCall(request)
+        operation.call = call
+        operation.call = call
+        calls[operation.requestId] = call
+
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, exception: IOException) {
+                if (call.isCanceled() || operation.cancelled) {
+                    finishRetryCancelled(activity, operation)
                     return
                 }
 
-                emitFailure(
-                    activity = activity,
-                    requestId = requestId,
-                    message = exception.message ?: "Network request failed.",
-                    code = failureCode(exception),
+                val code = failureCode(exception)
+                if (isRetryableNetwork(code) && scheduleRetry(
+                        activity, operation, code, null, null
+                    ) { enqueueStandardAttempt(activity, operation, client, request) }
+                ) return
+
+                finishRetryFailure(
+                    activity,
+                    operation,
+                    exception.message ?: "Network request failed.",
+                    code,
                 )
             }
 
-            override fun onResponse(
-                call: Call,
-                response: Response,
-            ) {
+            override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    calls.remove(requestId)
+                    if (operation.cancelled) {
+                        finishRetryCancelled(activity, operation)
+                        return
+                    }
+
+                    if (operation.policy?.statuses?.contains(response.code) == true) {
+                        if (scheduleRetry(
+                            activity,
+                            operation,
+                            "http_status",
+                            response.code,
+                            response.header("Retry-After"),
+                        ) { enqueueStandardAttempt(activity, operation, client, request) }
+                        ) return
+
+                        finishRetryFailure(
+                            activity,
+                            operation,
+                            "HTTP request failed with status ${response.code}.",
+                            "http_error",
+                        )
+                        return
+                    }
+
+                    if (!markRetryTerminal(operation)) return
+                    calls.remove(operation.requestId, call)
+                    retryOperations.remove(operation.requestId, operation)
 
                     val responseHeaders = JSONObject()
-
                     response.headers.names().forEach { name ->
                         val values = response.headers.values(name)
-
-                        if (values.size == 1) {
-                            responseHeaders.put(name, values.first())
-                        } else {
-                            val array = JSONArray()
-                            values.forEach { value ->
-                                array.put(value)
-                            }
-                            responseHeaders.put(name, array)
-                        }
+                        responseHeaders.put(
+                            name,
+                            if (values.size == 1) values.first() else JSONArray(values),
+                        )
                     }
-
-                    val responseBody = response.body?.string().orEmpty()
 
                     val payload = JSONObject().apply {
-                        put("requestId", requestId)
+                        put("requestId", operation.requestId)
                         put("status", response.code)
                         put("headers", responseHeaders)
-                        put("body", responseBody)
+                        put("body", response.body?.string().orEmpty())
                     }
-
-                    dispatchEvent(
-                        activity = activity,
-                        eventClass = EVENT_COMPLETED,
-                        payload = payload,
-                    )
+                    dispatchEvent(activity, EVENT_COMPLETED, payload)
                 }
             }
         })
@@ -299,6 +358,7 @@ private object FetchClient {
         query: Map<String, Any>,
         timeoutSeconds: Long,
         overwrite: Boolean,
+        retryPolicy: RetryPolicy?,
     ) {
         val parsedUrl = url.toHttpUrlOrNull()
             ?: throw DownloadStartException(
@@ -390,7 +450,9 @@ private object FetchClient {
             }
         }
 
-        val call = try {
+        val request: Request
+        val timedClient: OkHttpClient
+        try {
             val requestBuilder = Request.Builder()
                 .url(urlBuilder.build())
                 .get()
@@ -399,14 +461,14 @@ private object FetchClient {
                 requestBuilder.header(name, value)
             }
 
-            val timedClient = client.newBuilder()
+            timedClient = client.newBuilder()
                 .callTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .connectTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
                 .build()
 
-            timedClient.newCall(requestBuilder.build())
+            request = requestBuilder.build()
         } catch (exception: Exception) {
             activeDestinations.remove(destinationKey, requestId)
             partial.delete()
@@ -416,12 +478,19 @@ private object FetchClient {
             )
         }
         val state = DownloadState(
+            activity = activity,
             requestId = requestId,
             destination = destination,
             destinationKey = destinationKey,
             partial = partial,
             overwrite = overwrite,
+            policy = retryPolicy,
         )
+
+        state.attempt = 1
+
+        val call = timedClient.newCall(request)
+        state.call = call
 
         downloads[requestId] = state
         calls[requestId] = call
@@ -433,8 +502,21 @@ private object FetchClient {
             url = call.request().url.toString(),
         )
 
-        val callback = object : Callback {
+        lateinit var callback: Callback
+        callback = object : Callback {
             override fun onFailure(call: Call, exception: IOException) {
+                if (!call.isCanceled() && !state.cancelled &&
+                    isRetryableNetwork(failureCode(exception)) &&
+                    scheduleDownloadRetry(
+                        activity,
+                        state,
+                        timedClient,
+                        request,
+                        callback,
+                        failureCode(exception),
+                    )
+                ) return
+
                 finishDownloadFailure(
                     activity = activity,
                     call = call,
@@ -451,6 +533,19 @@ private object FetchClient {
                         }
 
                         if (response.code !in 200..299) {
+                            if (state.policy?.statuses?.contains(response.code) == true &&
+                                scheduleDownloadRetry(
+                                    activity,
+                                    state,
+                                    timedClient,
+                                    request,
+                                    callback,
+                                    "http_status",
+                                    response.code,
+                                    response.header("Retry-After"),
+                                )
+                            ) return
+
                             finishDownload(
                                 activity = activity,
                                 call = call,
@@ -600,8 +695,62 @@ private object FetchClient {
         }
     }
 
+    private fun scheduleDownloadRetry(
+        activity: FragmentActivity,
+        state: DownloadState,
+        client: OkHttpClient,
+        request: Request,
+        callback: Callback,
+        reason: String,
+        status: Int? = null,
+        retryAfter: String? = null,
+    ): Boolean {
+        val delay = synchronized(state) {
+            if (state.cancelled || state.terminal ||
+                state.policy == null || state.attempt >= state.policy.maxAttempts
+            ) return false
+
+            state.partial.delete()
+            val value = retryDelay(state.policy, state.attempt, retryAfter)
+            state.attempt++
+            value
+        }
+
+        emitRetrying(
+            activity,
+            state.requestId,
+            state.attempt,
+            state.policy!!.maxAttempts,
+            delay,
+            reason,
+            status,
+        )
+
+        calls.remove(state.requestId)
+        state.retryFuture = retryScheduler.schedule({
+            synchronized(state) {
+                if (state.cancelled || state.terminal) return@schedule
+                state.partial.delete()
+                val call = client.newCall(request)
+                state.call = call
+                calls[state.requestId] = call
+                call.enqueue(callback)
+            }
+        }, delay.toLong(), TimeUnit.MILLISECONDS)
+        return true
+    }
+
     fun cancel(requestId: String): Boolean {
-        val call = calls[requestId] ?: return false
+        retryOperations[requestId]?.let { operation ->
+            synchronized(operation) {
+                if (operation.terminal) return false
+                operation.cancelled = true
+                operation.retryFuture?.cancel(false)
+                operation.call?.cancel()
+            }
+            finishRetryCancelled(operation.activity, operation)
+            return true
+        }
 
         downloads[requestId]?.let { state ->
             synchronized(state) {
@@ -609,9 +758,21 @@ private object FetchClient {
                     return false
                 }
                 state.cancelled = true
+                state.retryFuture?.cancel(false)
+                state.call?.cancel()
             }
+            finishDownload(
+                activity = state.activity,
+                call = state.call ?: calls[requestId],
+                state = state,
+                cancelled = true,
+                failureMessage = "Download cancelled.",
+                failureCode = "network_error",
+            )
+            return true
         }
 
+        val call = calls[requestId] ?: return false
         call.cancel()
         return true
     }
@@ -665,11 +826,11 @@ private object FetchClient {
 
     private fun finishDownloadFailure(
         activity: FragmentActivity,
-        call: Call,
+        call: Call?,
         state: DownloadState,
         exception: Exception,
     ) {
-        val cancelled = call.isCanceled() || state.cancelled
+        val cancelled = call?.isCanceled() == true || state.cancelled
         val fileException = exception as? DownloadFileException
 
         finishDownload(
@@ -687,7 +848,7 @@ private object FetchClient {
 
     private fun finishDownload(
         activity: FragmentActivity,
-        call: Call,
+        call: Call?,
         state: DownloadState,
         cancelled: Boolean = false,
         failureMessage: String,
@@ -702,7 +863,7 @@ private object FetchClient {
 
         cleanupDownload(call, state, removePartial = true)
 
-        if (cancelled || state.cancelled || call.isCanceled()) {
+        if (cancelled || state.cancelled || call?.isCanceled() == true) {
             emitCancelled(activity, state.requestId)
         } else {
             emitFailure(
@@ -715,11 +876,15 @@ private object FetchClient {
     }
 
     private fun cleanupDownload(
-        call: Call,
+        call: Call?,
         state: DownloadState,
         removePartial: Boolean,
     ) {
-        calls.remove(state.requestId, call)
+        if (call != null) {
+            calls.remove(state.requestId, call)
+        } else {
+            calls.remove(state.requestId)
+        }
         downloads.remove(state.requestId, state)
         activeDestinations.remove(state.destinationKey, state.requestId)
 
@@ -1016,6 +1181,136 @@ private object FetchClient {
         dispatchEvent(activity, EVENT_DOWNLOAD_COMPLETED, payload)
     }
 
+    private fun scheduleRetry(
+        activity: FragmentActivity,
+        operation: RetryOperation,
+        reason: String,
+        status: Int?,
+        retryAfter: String?,
+        action: () -> Unit,
+    ): Boolean {
+        val policy = operation.policy ?: return false
+        val delay = synchronized(operation) {
+            if (operation.cancelled || operation.terminal ||
+                operation.attempt >= policy.maxAttempts
+            ) return false
+
+            retryDelay(policy, operation.attempt, retryAfter)
+        }
+
+        emitRetrying(
+            activity,
+            operation.requestId,
+            operation.attempt + 1,
+            policy.maxAttempts,
+            delay,
+            reason,
+            status,
+        )
+        calls.remove(operation.requestId)
+        operation.retryFuture = retryScheduler.schedule({
+            synchronized(operation) {
+                if (operation.cancelled || operation.terminal) return@schedule
+            }
+            action()
+        }, delay.toLong(), TimeUnit.MILLISECONDS)
+        return true
+    }
+
+    private fun retryDelay(
+        policy: RetryPolicy,
+        completedAttempt: Int,
+        retryAfter: String?,
+    ): Int {
+        val exponent = (completedAttempt - 1).coerceAtLeast(0)
+        val calculated = (policy.delay.toDouble() *
+            policy.multiplier.pow(exponent.toDouble()))
+            .coerceAtMost(Long.MAX_VALUE.toDouble())
+            .toLong()
+        val headerDelay = parseRetryAfter(retryAfter)
+        val base = headerDelay ?: calculated
+        val capped = policy.maxDelay?.let { minOf(base, it) } ?: base
+        val jittered = capped.toDouble() * Random.nextDouble(0.8, 1.2)
+        return jittered.coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
+    }
+
+    private fun parseRetryAfter(value: String?): Long? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        text.toLongOrNull()?.let { return it.coerceAtLeast(0L) * 1000L }
+
+        return try {
+            val target = ZonedDateTime.parse(text, DateTimeFormatter.RFC_1123_DATE_TIME)
+                .toInstant().toEpochMilli()
+            (target - System.currentTimeMillis()).coerceAtLeast(0L)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun isRetryableNetwork(code: String): Boolean = code in setOf(
+        "timeout",
+        "offline",
+        "dns_failure",
+        "connection_failed",
+        "network_error",
+    )
+
+    private fun markRetryTerminal(operation: RetryOperation): Boolean =
+        synchronized(operation) {
+            if (operation.terminal || operation.cancelled) false
+            else {
+                operation.terminal = true
+                true
+            }
+        }
+
+    private fun finishRetryFailure(
+        activity: FragmentActivity,
+        operation: RetryOperation,
+        message: String,
+        code: String,
+    ) {
+        if (!markRetryTerminal(operation)) return
+        calls.remove(operation.requestId)
+        retryOperations.remove(operation.requestId, operation)
+        emitFailure(activity, operation.requestId, message, code)
+    }
+
+    private fun finishRetryCancelled(
+        activity: FragmentActivity,
+        operation: RetryOperation,
+    ) {
+        synchronized(operation) {
+            if (operation.terminal) return
+            operation.cancelled = true
+            operation.terminal = true
+            operation.retryFuture?.cancel(false)
+        }
+        calls.remove(operation.requestId)
+        retryOperations.remove(operation.requestId, operation)
+        emitCancelled(activity, operation.requestId)
+    }
+
+    private fun emitRetrying(
+        activity: FragmentActivity,
+        requestId: String,
+        attempt: Int,
+        maxAttempts: Int,
+        delayMs: Int,
+        reason: String,
+        status: Int?,
+    ) {
+        val payload = JSONObject().apply {
+            put("requestId", requestId)
+            put("attempt", attempt)
+            put("maxAttempts", maxAttempts)
+            put("delayMs", delayMs)
+            put("reason", reason)
+            put("status", status ?: JSONObject.NULL)
+        }
+        dispatchEvent(activity, EVENT_RETRYING, payload)
+    }
+
     private fun dispatchEvent(
         activity: FragmentActivity,
         eventClass: String,
@@ -1081,14 +1376,41 @@ private class DownloadFileException(
 ) : IOException(message)
 
 private data class DownloadState(
+    val activity: FragmentActivity,
     val requestId: String,
     val destination: File,
     val destinationKey: String,
     val partial: File,
     val overwrite: Boolean,
+    val policy: RetryPolicy?,
     @Volatile var cancelled: Boolean = false,
     @Volatile var terminal: Boolean = false,
+    @Volatile var attempt: Int = 0,
+    @Volatile var call: Call? = null,
+    @Volatile var retryFuture: ScheduledFuture<*>? = null,
 )
+
+private data class RetryPolicy(
+    val times: Int,
+    val delay: Long,
+    val multiplier: Double,
+    val maxDelay: Long?,
+    val statuses: Set<Int>,
+) {
+    val maxAttempts: Int = times + 1
+}
+
+private class RetryOperation(
+    val requestId: String,
+    val policy: RetryPolicy?,
+) {
+    lateinit var activity: FragmentActivity
+    var attempt = 0
+    var cancelled = false
+    var terminal = false
+    var call: Call? = null
+    var retryFuture: ScheduledFuture<*>? = null
+}
 
 private class ProgressRequestBody(
     private val delegate: RequestBody,
@@ -1211,6 +1533,7 @@ object FetchFunctions {
                 ?: emptyMap()
 
             val body = bridgeMap(parameters["body"])
+            val retryPolicy = bridgeRetryPolicy(parameters["retry"])
 
             return try {
                 FetchClient.start(
@@ -1222,6 +1545,7 @@ object FetchFunctions {
                     query = query,
                     body = body,
                     timeoutSeconds = timeout,
+                    retryPolicy = retryPolicy,
                 )
 
                 BridgeResponse.success(
@@ -1293,6 +1617,7 @@ object FetchFunctions {
             val rawHeaders = bridgeMap(parameters["headers"]) ?: emptyMap()
             val headers = rawHeaders.mapValues { (_, value) -> value.toString() }
             val query = bridgeMap(parameters["query"]) ?: emptyMap()
+            val retryPolicy = bridgeRetryPolicy(parameters["retry"])
 
             return try {
                 FetchClient.download(
@@ -1304,6 +1629,7 @@ object FetchFunctions {
                     query,
                     timeout,
                     overwrite,
+                    retryPolicy,
                 )
 
                 BridgeResponse.success(

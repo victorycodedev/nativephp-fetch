@@ -18,6 +18,8 @@ class PendingRequest
 
     protected bool $sendJson = true;
 
+    protected ?array $retry = null;
+
     public function __construct()
     {
         $this->requestId = (string) Str::uuid7();
@@ -87,6 +89,52 @@ class PendingRequest
         }
 
         $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    public function retry(
+        int $times = 3,
+        int $delay = 500,
+        float $multiplier = 2.0,
+        ?int $maxDelay = 30000,
+        array $statuses = [],
+    ): static {
+        if ($times < 0) {
+            throw new FetchException('Fetch retry times cannot be negative.');
+        }
+
+        if ($delay < 0) {
+            throw new FetchException('Fetch retry delay cannot be negative.');
+        }
+
+        if ($multiplier < 1.0) {
+            throw new FetchException(
+                'Fetch retry multiplier must be at least 1.0.'
+            );
+        }
+
+        if ($maxDelay !== null && $maxDelay < $delay) {
+            throw new FetchException(
+                'Fetch retry maxDelay must be greater than or equal to delay.'
+            );
+        }
+
+        foreach ($statuses as $status) {
+            if (! is_int($status) || $status < 100 || $status > 599) {
+                throw new FetchException(
+                    'Fetch retry statuses must contain valid integer HTTP status codes.'
+                );
+            }
+        }
+
+        $this->retry = [
+            'times' => $times,
+            'delay' => $delay,
+            'multiplier' => $multiplier,
+            'max_delay' => $maxDelay,
+            'statuses' => array_values(array_unique($statuses)),
+        ];
 
         return $this;
     }
@@ -278,6 +326,7 @@ class PendingRequest
                 'query' => $query,
                 'timeout' => $this->timeout,
                 'overwrite' => $overwrite,
+                'retry' => $this->retry,
             ],
         );
 
@@ -332,6 +381,7 @@ class PendingRequest
                 method: $method,
                 data: $data,
             ),
+            'retry' => $this->retry,
         ];
 
         $response = $this->bridgeCall(

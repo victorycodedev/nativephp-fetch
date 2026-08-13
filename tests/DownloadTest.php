@@ -44,6 +44,7 @@ it('builds a complete fluent download bridge payload', function () {
                 'query' => ['version' => 2, 'tag' => ['a', 'b']],
                 'timeout' => 60,
                 'overwrite' => true,
+                'retry' => null,
             ],
         ]);
 });

@@ -44,3 +44,11 @@ official client from `resources/js/fetch.js`. It exposes `Fetch.get()`,
 `post()`, `put()`, `patch()`, `delete()`, `download()`, `cancel()`, and fluent
 request configuration matching the PHP API. Prefer the PHP facade inside
 NativeComponents.
+
+### Retries
+
+Retries are opt-in with `Fetch::retry()`. `retry(3)` means the initial attempt
+plus up to three native retries. Retries use exponential backoff, bounded
+jitter, `Retry-After`, and remain cancellable during delays. JavaScript uses
+`Fetch.retry({ times: 3, delay: 500, multiplier: 2 })`; native Swift/Kotlin owns
+the retry scheduling.

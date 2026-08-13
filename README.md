@@ -130,6 +130,64 @@ When `Content-Length` is unavailable, `bytesTotal` and `progress` are `null`.
 `bytesReceived` continues increasing so applications can present an
 indeterminate progress indicator.
 
+## Retry policy
+
+Retries are strictly opt-in and run asynchronously in the native networking
+engine. Calls without `retry()` make one logical Fetch attempt.
+
+```php
+Fetch::retry(3)->get($url);
+```
+
+`retry(times: 3)` means one initial attempt plus up to three retries: four
+network attempts maximum.
+
+```php
+Fetch::retry(
+    times: 3,
+    delay: 500,
+    multiplier: 2,
+    maxDelay: 10000,
+)->get($url);
+```
+
+Retry delays use exponential backoff with approximately ±20% jitter. A valid
+HTTP `Retry-After` value (seconds or HTTP date) takes precedence over calculated
+backoff, and `maxDelay` caps the resulting base delay. The retry event reports
+the actual jittered delay. Malformed `Retry-After` values fall back to backoff.
+
+Default retryable statuses are `408`, `429`, `500`, `502`, `503`, and `504`.
+Passing a non-empty `statuses` array replaces that list; built-in transient
+network retry rules remain enabled.
+
+```php
+Fetch::retry(statuses: [409, 425])->post($url, $data);
+```
+
+Each attempt gets the configured request timeout; retry delays are separate and
+there is no overall multi-attempt deadline. The same request ID is retained.
+Cancellation stops either an active attempt or a pending retry delay.
+
+Uploads reopen their file-backed bodies and progress resets to zero for each
+attempt. Downloads remove the failed attempt’s partial file and restart at byte
+zero; resumable Range downloads are not part of V1.
+
+```php
+use Victorycodedev\NativephpFetch\Events\FetchRequestRetrying;
+
+#[On(FetchRequestRetrying::class)]
+public function onRetrying(
+    string $requestId,
+    int $attempt,
+    int $maxAttempts,
+    int $delayMs,
+    string $reason,
+    ?int $status = null,
+): void {
+    // The next native attempt is $attempt of $maxAttempts.
+}
+```
+
 ## Cancellation
 
 The same cancellation API works for requests, uploads, and downloads:
@@ -204,6 +262,18 @@ await request.download(url, destinationPath, {
 
 await request.cancel();
 // Or: await Fetch.cancel(requestId);
+```
+
+JavaScript retry configuration is forwarded to the native engine; JavaScript
+does not run timers or retry loops:
+
+```javascript
+await Fetch.retry({
+    times: 3,
+    delay: 500,
+    multiplier: 2,
+    maxDelay: 10000,
+}).get(url);
 ```
 
 The native event names registered in `nativephp.json` can be consumed through

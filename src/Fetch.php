@@ -41,6 +41,22 @@ class Fetch
         return $this->request()->timeout($seconds);
     }
 
+    public function retry(
+        int $times = 3,
+        int $delay = 500,
+        float $multiplier = 2.0,
+        ?int $maxDelay = 30000,
+        array $statuses = [],
+    ): PendingRequest {
+        return $this->request()->retry(
+            $times,
+            $delay,
+            $multiplier,
+            $maxDelay,
+            $statuses,
+        );
+    }
+
     public function attach(
         string $name,
         string $path,
