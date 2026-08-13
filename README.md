@@ -254,7 +254,7 @@ class SynchronizeAccount implements ShouldQueue
 ```
 
 If a native request must continue independently after the app is suspended or
-terminated, Fetch V1 is also not the correct tool; use an appropriate native
+terminated, Fetch is also not the correct tool; use an appropriate native
 background-transfer solution.
 
 ## Downloads
