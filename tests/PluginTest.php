@@ -113,8 +113,14 @@ describe('Native Code', function () {
 
 describe('JavaScript Client', function () {
     it('exports every bridge function and public request method', function () {
-        $file = $this->pluginPath . '/resources/js/fetch.js';
-        $content = file_get_contents($file);
+        $content = '';
+        foreach (new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($this->pluginPath . '/resources/js')
+        ) as $file) {
+            if ($file->isFile() && $file->getExtension() === 'js') {
+                $content .= file_get_contents($file->getPathname());
+            }
+        }
 
         expect($content)->toContain(
             'Fetch.Start',

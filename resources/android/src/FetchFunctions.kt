@@ -1,13 +1,9 @@
 package com.victorycodedev.plugins.nativephp_fetch
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import com.nativephp.mobile.bridge.BridgeFunction
 import com.nativephp.mobile.bridge.BridgeResponse
-import com.nativephp.mobile.utils.NativeActionCoordinator
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -19,9 +15,6 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
-import okio.BufferedSink
-import okio.ForwardingSink
-import okio.buffer
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -32,96 +25,13 @@ import java.net.UnknownHostException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
-import kotlin.math.pow
-import kotlin.random.Random
 import javax.net.ssl.SSLException
 
-private fun bridgeMap(value: Any?): Map<String, Any>? =
-    when (value) {
-        is Map<*, *> -> value.entries.mapNotNull { (key, item) ->
-            val normalized = normalizeBridgeValue(item)
-            if (key == null || normalized == null) {
-                null
-            } else {
-                key.toString() to normalized
-            }
-        }.toMap()
-        is JSONObject -> value.keys().asSequence().mapNotNull { key ->
-            val normalized = normalizeBridgeValue(value.opt(key))
-            normalized?.let { key to it }
-        }.toMap()
-        else -> null
-    }
-
-private fun bridgeList(value: Any?): List<Any> =
-    when (value) {
-        is Collection<*> -> value.mapNotNull(::normalizeBridgeValue)
-        is JSONArray -> (0 until value.length()).mapNotNull { index ->
-            normalizeBridgeValue(value.opt(index))
-        }
-        else -> emptyList()
-    }
-
-private fun normalizeBridgeValue(value: Any?): Any? =
-    when (value) {
-        null, JSONObject.NULL -> null
-        is Map<*, *>, is JSONObject -> bridgeMap(value)
-        is Collection<*>, is JSONArray -> bridgeList(value)
-        else -> value
-    }
-
-private fun bridgeRetryPolicy(value: Any?): RetryPolicy? {
-    val retry = bridgeMap(value) ?: return null
-    val defaults = setOf(408, 429, 500, 502, 503, 504)
-    val custom = bridgeList(retry["statuses"])
-        .mapNotNull { (it as? Number)?.toInt() }
-        .toSet()
-
-    return RetryPolicy(
-        times = (retry["times"] as? Number)?.toInt() ?: 3,
-        delay = (retry["delay"] as? Number)?.toLong() ?: 500L,
-        multiplier = (retry["multiplier"] as? Number)?.toDouble() ?: 2.0,
-        maxDelay = when (val value = retry["max_delay"]) {
-            is Number -> value.toLong()
-            else -> null
-        },
-        statuses = custom.ifEmpty { defaults },
-    )
-}
-
 private object FetchClient {
-
-    private const val TAG = "NativePHPFetch"
-
-    private const val EVENT_STARTED =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestStarted"
-
-    private const val EVENT_COMPLETED =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCompleted"
-
-    private const val EVENT_FAILED =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestFailed"
-
-    private const val EVENT_CANCELLED =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCancelled"
-
-    private const val EVENT_UPLOAD_PROGRESS =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress"
-
-    private const val EVENT_DOWNLOAD_PROGRESS =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress"
-
-    private const val EVENT_DOWNLOAD_COMPLETED =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
-
-    private const val EVENT_RETRYING =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
 
     private val client = OkHttpClient.Builder()
         .retryOnConnectionFailure(false)
@@ -342,7 +252,7 @@ private object FetchClient {
                         put("headers", responseHeaders)
                         put("body", response.body?.string().orEmpty())
                     }
-                    dispatchEvent(activity, EVENT_COMPLETED, payload)
+                    NativeEventDispatcher.dispatch(activity, FetchEvents.COMPLETED, payload)
                 }
             }
         })
@@ -1049,9 +959,9 @@ private object FetchClient {
             put("url", url)
         }
 
-        dispatchEvent(
+        NativeEventDispatcher.dispatch(
             activity = activity,
-            eventClass = EVENT_STARTED,
+            eventClass = FetchEvents.STARTED,
             payload = payload,
         )
     }
@@ -1070,9 +980,9 @@ private object FetchClient {
             }
         }
 
-        dispatchEvent(
+        NativeEventDispatcher.dispatch(
             activity = activity,
-            eventClass = EVENT_FAILED,
+            eventClass = FetchEvents.FAILED,
             payload = payload,
         )
     }
@@ -1085,9 +995,9 @@ private object FetchClient {
             put("requestId", requestId)
         }
 
-        dispatchEvent(
+        NativeEventDispatcher.dispatch(
             activity = activity,
-            eventClass = EVENT_CANCELLED,
+            eventClass = FetchEvents.CANCELLED,
             payload = payload,
         )
     }
@@ -1118,9 +1028,9 @@ private object FetchClient {
             put("progress", progress)
         }
 
-        dispatchEvent(
+        NativeEventDispatcher.dispatch(
             activity = activity,
-            eventClass = EVENT_UPLOAD_PROGRESS,
+            eventClass = FetchEvents.UPLOAD_PROGRESS,
             payload = payload,
         )
     }
@@ -1149,7 +1059,7 @@ private object FetchClient {
             put("progress", progress ?: JSONObject.NULL)
         }
 
-        dispatchEvent(activity, EVENT_DOWNLOAD_PROGRESS, payload)
+        NativeEventDispatcher.dispatch(activity, FetchEvents.DOWNLOAD_PROGRESS, payload)
     }
 
     private fun emitDownloadCompleted(
@@ -1178,7 +1088,7 @@ private object FetchClient {
             put("bytesReceived", bytesReceived)
         }
 
-        dispatchEvent(activity, EVENT_DOWNLOAD_COMPLETED, payload)
+        NativeEventDispatcher.dispatch(activity, FetchEvents.DOWNLOAD_COMPLETED, payload)
     }
 
     private fun scheduleRetry(
@@ -1215,41 +1125,6 @@ private object FetchClient {
             action()
         }, delay.toLong(), TimeUnit.MILLISECONDS)
         return true
-    }
-
-    private fun retryDelay(
-        policy: RetryPolicy,
-        completedAttempt: Int,
-        retryAfter: String?,
-    ): Int {
-        val exponent = (completedAttempt - 1).coerceAtLeast(0)
-        val calculated = (policy.delay.toDouble() *
-            policy.multiplier.pow(exponent.toDouble()))
-            .coerceAtMost(Long.MAX_VALUE.toDouble())
-            .toLong()
-        val headerDelay = parseRetryAfter(retryAfter)
-        val base = headerDelay ?: calculated
-        val jittered = base.toDouble() * Random.nextDouble(0.8, 1.2)
-        val capped = policy.maxDelay?.let {
-            minOf(jittered, it.toDouble())
-        } ?: jittered
-        return capped.coerceIn(0.0, Int.MAX_VALUE.toDouble()).toInt()
-    }
-
-    private fun parseRetryAfter(value: String?): Long? {
-        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        text.toLongOrNull()?.let {
-            return it.coerceAtLeast(0L)
-                .coerceAtMost(Long.MAX_VALUE / 1000L) * 1000L
-        }
-
-        return try {
-            val target = ZonedDateTime.parse(text, DateTimeFormatter.RFC_1123_DATE_TIME)
-                .toInstant().toEpochMilli()
-            (target - System.currentTimeMillis()).coerceAtLeast(0L)
-        } catch (_: Exception) {
-            null
-        }
     }
 
     private fun isRetryableNetwork(code: String): Boolean = code in setOf(
@@ -1313,29 +1188,7 @@ private object FetchClient {
             put("reason", reason)
             put("status", status ?: JSONObject.NULL)
         }
-        dispatchEvent(activity, EVENT_RETRYING, payload)
-    }
-
-    private fun dispatchEvent(
-        activity: FragmentActivity,
-        eventClass: String,
-        payload: JSONObject,
-    ) {
-        Handler(Looper.getMainLooper()).post {
-            try {
-                NativeActionCoordinator.dispatchEvent(
-                    activity,
-                    eventClass,
-                    payload.toString(),
-                )
-            } catch (exception: Exception) {
-                Log.e(
-                    TAG,
-                    "Failed to dispatch $eventClass: ${exception.message}",
-                    exception,
-                )
-            }
-        }
+        NativeEventDispatcher.dispatch(activity, FetchEvents.RETRYING, payload)
     }
 
     private fun failureCode(
@@ -1369,129 +1222,6 @@ private data class BodyBuildResult(
     val body: RequestBody? = null,
     val failed: Boolean = false,
 )
-
-private class DownloadStartException(
-    val code: String,
-    override val message: String,
-) : Exception(message)
-
-private class DownloadFileException(
-    val code: String,
-    override val message: String,
-) : IOException(message)
-
-private data class DownloadState(
-    val activity: FragmentActivity,
-    val requestId: String,
-    val destination: File,
-    val destinationKey: String,
-    val partial: File,
-    val overwrite: Boolean,
-    val policy: RetryPolicy?,
-    @Volatile var cancelled: Boolean = false,
-    @Volatile var terminal: Boolean = false,
-    @Volatile var attempt: Int = 0,
-    @Volatile var call: Call? = null,
-    @Volatile var retryFuture: ScheduledFuture<*>? = null,
-)
-
-private data class RetryPolicy(
-    val times: Int,
-    val delay: Long,
-    val multiplier: Double,
-    val maxDelay: Long?,
-    val statuses: Set<Int>,
-) {
-    val maxAttempts: Int = times + 1
-}
-
-private class RetryOperation(
-    val requestId: String,
-    val policy: RetryPolicy?,
-) {
-    lateinit var activity: FragmentActivity
-    var attempt = 0
-    var cancelled = false
-    var terminal = false
-    var call: Call? = null
-    var retryFuture: ScheduledFuture<*>? = null
-}
-
-private class ProgressRequestBody(
-    private val delegate: RequestBody,
-    private val onProgress: (
-        bytesSent: Long,
-        bytesTotal: Long,
-    ) -> Unit,
-) : RequestBody() {
-
-    override fun contentType() =
-        delegate.contentType()
-
-    override fun contentLength(): Long =
-        delegate.contentLength()
-
-    override fun isOneShot(): Boolean =
-        delegate.isOneShot()
-
-    override fun writeTo(sink: BufferedSink) {
-        val totalBytes = contentLength()
-
-        var bytesWritten = 0L
-        var lastEmitAt = 0L
-        var lastEmittedBytes = -1L
-
-        val forwardingSink =
-            object : ForwardingSink(sink) {
-                override fun write(
-                    source: okio.Buffer,
-                    byteCount: Long,
-                ) {
-                    super.write(source, byteCount)
-                    bytesWritten += byteCount
-
-                    val now = System.currentTimeMillis()
-
-                    val finished =
-                        totalBytes > 0L && bytesWritten >= totalBytes
-
-                    val shouldEmit =
-                        finished ||
-                            lastEmitAt == 0L ||
-                            (now - lastEmitAt >= 100L)
-
-                    if (shouldEmit) {
-                        lastEmitAt = now
-                        lastEmittedBytes = bytesWritten
-
-                        onProgress(
-                            bytesWritten,
-                            if (totalBytes > 0L) totalBytes else bytesWritten,
-                        )
-                    }
-                }
-            }
-
-        val bufferedSink = forwardingSink.buffer()
-
-        delegate.writeTo(bufferedSink)
-        bufferedSink.flush()
-
-        val finalTotal =
-            if (totalBytes > 0L) totalBytes else bytesWritten
-
-        val finalSent =
-            if (totalBytes > 0L) {
-                totalBytes
-            } else {
-                bytesWritten
-            }
-
-        if (lastEmittedBytes != finalSent) {
-            onProgress(finalSent, finalTotal)
-        }
-    }
-}
 
 object FetchFunctions {
 

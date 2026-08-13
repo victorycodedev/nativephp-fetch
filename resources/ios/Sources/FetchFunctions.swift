@@ -6,30 +6,6 @@ private final class FetchClient: NSObject,
 
     static let shared = FetchClient()
 
-    private static let eventStarted =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestStarted"
-
-    private static let eventCompleted =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCompleted"
-
-    private static let eventFailed =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestFailed"
-
-    private static let eventCancelled =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCancelled"
-
-    private static let eventUploadProgress =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress"
-
-    private static let eventDownloadProgress =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress"
-
-    private static let eventDownloadCompleted =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
-
-    private static let eventRetrying =
-        "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
-
     private let lock = NSLock()
 
     private var tasks: [String: URLSessionTask] = [:]
@@ -1505,7 +1481,7 @@ private final class FetchClient: NSObject,
         url: String
     ) {
         dispatchEvent(
-            name: Self.eventStarted,
+            name: FetchEvents.started,
             payload: [
                 "requestId": requestId,
                 "method": method,
@@ -1521,7 +1497,7 @@ private final class FetchClient: NSObject,
         body: String
     ) {
         dispatchEvent(
-            name: Self.eventCompleted,
+            name: FetchEvents.completed,
             payload: [
                 "requestId": requestId,
                 "status": status,
@@ -1546,7 +1522,7 @@ private final class FetchClient: NSObject,
         }
 
         dispatchEvent(
-            name: Self.eventFailed,
+            name: FetchEvents.failed,
             payload: payload
         )
     }
@@ -1555,7 +1531,7 @@ private final class FetchClient: NSObject,
         requestId: String
     ) {
         dispatchEvent(
-            name: Self.eventCancelled,
+            name: FetchEvents.cancelled,
             payload: [
                 "requestId": requestId
             ]
@@ -1569,7 +1545,7 @@ private final class FetchClient: NSObject,
         progress: Double
     ) {
         dispatchEvent(
-            name: Self.eventUploadProgress,
+            name: FetchEvents.uploadProgress,
             payload: [
                 "requestId": requestId,
                 "bytesSent": bytesSent,
@@ -1604,7 +1580,7 @@ private final class FetchClient: NSObject,
         let progressValue: Any = progress.map { $0 } ?? NSNull()
 
         dispatchEvent(
-            name: Self.eventDownloadProgress,
+            name: FetchEvents.downloadProgress,
             payload: [
                 "requestId": requestId,
                 "bytesReceived": max(bytesReceived, 0),
@@ -1622,7 +1598,7 @@ private final class FetchClient: NSObject,
         bytesReceived: Int64
     ) {
         dispatchEvent(
-            name: Self.eventDownloadCompleted,
+            name: FetchEvents.downloadCompleted,
             payload: [
                 "requestId": requestId,
                 "status": status,
@@ -1642,7 +1618,7 @@ private final class FetchClient: NSObject,
         status: Int?
     ) {
         dispatchEvent(
-            name: Self.eventRetrying,
+            name: FetchEvents.retrying,
             payload: [
                 "requestId": requestId,
                 "attempt": attempt,
@@ -1708,12 +1684,7 @@ private final class FetchClient: NSObject,
         name: String,
         payload: [String: Any]
     ) {
-        DispatchQueue.main.async {
-            LaravelBridge.shared.send?(
-                name,
-                payload
-            )
-        }
+        NativeEventDispatcher.dispatch(name: name, payload: payload)
     }
 
     private func failureCode(
@@ -1751,102 +1722,6 @@ private final class FetchClient: NSObject,
 private struct MultipartBuildResult {
     let fileURL: URL
     let boundary: String
-}
-
-private final class DownloadState {
-    let requestId: String
-    let request: URLRequest
-    let destination: URL
-    let destinationKey: String
-    let partial: URL
-    let overwrite: Bool
-    let policy: RetryPolicy?
-    var cancelled = false
-    var terminal = false
-    var lastProgressAt: TimeInterval = 0
-    var attempt = 0
-    weak var task: URLSessionTask?
-    var retryWorkItem: DispatchWorkItem?
-
-    init(
-        requestId: String,
-        request: URLRequest,
-        destination: URL,
-        destinationKey: String,
-        partial: URL,
-        overwrite: Bool,
-        policy: RetryPolicy?
-    ) {
-        self.requestId = requestId
-        self.request = request
-        self.destination = destination
-        self.destinationKey = destinationKey
-        self.partial = partial
-        self.overwrite = overwrite
-        self.policy = policy
-    }
-}
-
-private struct RetryPolicy {
-    let times: Int
-    let delay: Int
-    let multiplier: Double
-    let maxDelay: Int?
-    let statuses: Set<Int>
-
-    var maxAttempts: Int { times + 1 }
-}
-
-private final class StandardRetryState {
-    let requestId: String
-    let request: URLRequest
-    let uploadFile: URL?
-    let policy: RetryPolicy?
-    var attempt = 0
-    var cancelled = false
-    var terminal = false
-    weak var task: URLSessionTask?
-    var retryWorkItem: DispatchWorkItem?
-
-    init(
-        requestId: String,
-        request: URLRequest,
-        uploadFile: URL?,
-        policy: RetryPolicy?
-    ) {
-        self.requestId = requestId
-        self.request = request
-        self.uploadFile = uploadFile
-        self.policy = policy
-    }
-}
-
-private enum FetchNativeError: Error {
-
-    case invalidURL
-    case invalidBody
-    case invalidFile
-    case fileNotFound(String)
-    case multipartBuildFailed
-    case download(code: String, message: String)
-}
-
-private func retryPolicy(from value: Any?) -> RetryPolicy? {
-    guard let retry = value as? [String: Any] else { return nil }
-    let defaults: Set<Int> = [408, 429, 500, 502, 503, 504]
-    let custom = Set(
-        (retry["statuses"] as? [Any] ?? []).compactMap {
-            ($0 as? NSNumber)?.intValue
-        }
-    )
-
-    return RetryPolicy(
-        times: (retry["times"] as? NSNumber)?.intValue ?? 3,
-        delay: (retry["delay"] as? NSNumber)?.intValue ?? 500,
-        multiplier: (retry["multiplier"] as? NSNumber)?.doubleValue ?? 2,
-        maxDelay: (retry["max_delay"] as? NSNumber)?.intValue,
-        statuses: custom.isEmpty ? defaults : custom
-    )
 }
 
 enum FetchFunctions {

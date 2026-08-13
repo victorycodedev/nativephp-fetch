@@ -76,12 +76,17 @@ it('keeps manifest events synchronized with PHP and native implementations', fun
         true,
         flags: JSON_THROW_ON_ERROR,
     );
-    $android = file_get_contents(
-        $root . '/resources/android/src/FetchFunctions.kt'
-    );
-    $ios = file_get_contents(
-        $root . '/resources/ios/Sources/FetchFunctions.swift'
-    );
+    $nativeSources = static function (string $path, string $extension): string {
+        $contents = '';
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path)) as $file) {
+            if ($file->isFile() && $file->getExtension() === $extension) {
+                $contents .= file_get_contents($file->getPathname());
+            }
+        }
+        return $contents;
+    };
+    $android = $nativeSources($root . '/resources/android/src', 'kt');
+    $ios = $nativeSources($root . '/resources/ios/Sources', 'swift');
 
     foreach ($manifest['events'] as $event) {
         $class = class_basename($event);
@@ -99,13 +104,18 @@ it('keeps every manifest bridge registered in native code and JavaScript', funct
         true,
         flags: JSON_THROW_ON_ERROR,
     );
-    $android = file_get_contents(
-        $root . '/resources/android/src/FetchFunctions.kt'
-    );
-    $ios = file_get_contents(
-        $root . '/resources/ios/Sources/FetchFunctions.swift'
-    );
-    $javascript = file_get_contents($root . '/resources/js/fetch.js');
+    $sources = static function (string $path, string $extension): string {
+        $contents = '';
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path)) as $file) {
+            if ($file->isFile() && $file->getExtension() === $extension) {
+                $contents .= file_get_contents($file->getPathname());
+            }
+        }
+        return $contents;
+    };
+    $android = $sources($root . '/resources/android/src', 'kt');
+    $ios = $sources($root . '/resources/ios/Sources', 'swift');
+    $javascript = $sources($root . '/resources/js', 'js');
 
     foreach ($manifest['bridge_functions'] as $bridge) {
         $androidClass = class_basename(str_replace('.', '\\', $bridge['android']));
