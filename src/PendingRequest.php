@@ -5,6 +5,7 @@ namespace Victorycodedev\NativephpFetch;
 use Illuminate\Support\Str;
 use JsonException;
 use Victorycodedev\NativephpFetch\Exceptions\FetchException;
+use Victorycodedev\NativephpFetch\Testing\FakeFetch;
 
 class PendingRequest
 {
@@ -16,11 +17,13 @@ class PendingRequest
 
     protected int $timeout = 30;
 
-    protected bool $sendJson = true;
+    protected string $bodyMode = 'json';
+
+    protected ?string $rawBody = null;
 
     protected ?array $retry = null;
 
-    public function __construct()
+    public function __construct(protected ?FakeFetch $fake = null)
     {
         $this->requestId = (string) Str::uuid7();
     }
@@ -68,14 +71,33 @@ class PendingRequest
 
     public function asJson(): static
     {
-        $this->sendJson = true;
+        $this->assertNoAttachments('JSON');
+        $this->bodyMode = 'json';
+        $this->rawBody = null;
+        $this->withHeader('Content-Type', 'application/json');
 
-        if ($this->attachments === []) {
-            $this->withHeader(
-                'Content-Type',
-                'application/json',
-            );
+        return $this;
+    }
+
+    public function asForm(): static
+    {
+        $this->assertNoAttachments('form');
+        $this->bodyMode = 'form';
+        $this->rawBody = null;
+        $this->withHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+        return $this;
+    }
+
+    public function withBody(string $body, string $contentType = 'text/plain'): static
+    {
+        $this->assertNoAttachments('raw body');
+        if (trim($contentType) === '') {
+            throw new FetchException('Fetch raw body content type cannot be empty.');
         }
+        $this->bodyMode = 'raw';
+        $this->rawBody = $body;
+        $this->withHeader('Content-Type', $contentType);
 
         return $this;
     }
@@ -145,6 +167,9 @@ class PendingRequest
         ?string $filename = null,
         ?string $mimeType = null,
     ): static {
+        if ($this->bodyMode === 'form' || $this->bodyMode === 'raw') {
+            throw new FetchException('Fetch attachments cannot be combined with form or raw bodies.');
+        }
         if (trim($name) === '') {
             throw new FetchException(
                 'Fetch attachment field name cannot be empty.'
@@ -249,6 +274,9 @@ class PendingRequest
             throw new FetchException(
                 'Fetch attachments cannot be sent with a GET request.'
             );
+        }
+        if ($this->bodyMode !== 'json' || $this->rawBody !== null) {
+            throw new FetchException('Fetch request bodies cannot be sent with a GET request.');
         }
 
         return $this->send(
@@ -421,16 +449,53 @@ class PendingRequest
             ];
         }
 
+        if ($this->bodyMode === 'raw') {
+            if ($data !== []) {
+                throw new FetchException('Fetch raw bodies cannot be combined with method data.');
+            }
+
+            return ['type' => 'raw', 'data' => $this->rawBody ?? ''];
+        }
+
+        if ($this->bodyMode === 'form') {
+            return [
+                'type' => 'form',
+                'data' => $this->encodeForm($data),
+            ];
+        }
+
         if ($data === []) {
             return null;
         }
 
         return [
-            'type' => $this->sendJson
-                ? 'json'
-                : 'raw',
+            'type' => 'json',
             'data' => $data,
         ];
+    }
+
+    protected function assertNoAttachments(string $mode): void
+    {
+        if ($this->attachments !== []) {
+            throw new FetchException("Fetch attachments cannot be combined with {$mode} bodies.");
+        }
+    }
+
+    protected function encodeForm(array $data): string
+    {
+        $pairs = [];
+        foreach ($data as $name => $value) {
+            foreach (is_array($value) && array_is_list($value) ? $value : [$value] as $item) {
+                $normalized = match (true) {
+                    is_bool($item) => $item ? '1' : '0',
+                    $item === null => '',
+                    is_array($item), is_object($item) => json_encode($item, JSON_THROW_ON_ERROR),
+                    default => (string) $item,
+                };
+                $pairs[] = urlencode((string) $name) . '=' . urlencode($normalized);
+            }
+        }
+        return implode('&', $pairs);
     }
 
     /**
@@ -462,6 +527,9 @@ class PendingRequest
         string $function,
         array $payload,
     ): array {
+        if ($this->fake !== null) {
+            return $this->fake->handle($function, $payload);
+        }
         if (! function_exists('nativephp_call')) {
             throw new FetchException(
                 'Fetch requires the NativePHP Mobile runtime.'

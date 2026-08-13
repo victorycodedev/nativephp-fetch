@@ -138,3 +138,11 @@ it('distinguishes Android call timeouts from explicit cancellation', function ()
         ->not->toContain('if (call.isCanceled() || operation.cancelled)')
         ->not->toContain('val cancelled = call?.isCanceled() == true || state.cancelled');
 });
+
+it('implements explicit form and raw modes on both native platforms', function () {
+    $root = dirname(__DIR__);
+    $android = file_get_contents($root.'/resources/android/src/FetchFunctions.kt');
+    $ios = file_get_contents($root.'/resources/ios/Sources/FetchFunctions.swift');
+    expect($android)->toContain('"form" ->', '"raw" ->', 'application/x-www-form-urlencoded')
+        ->and($ios)->toContain('case "form":', 'case "raw":', 'application/x-www-form-urlencoded');
+});

@@ -8,7 +8,8 @@ export class PendingRequest {
     this.headers = {};
     this.attachments = [];
     this.timeoutSeconds = 30;
-    this.sendJson = true;
+    this.bodyMode = "json";
+    this.rawBody = null;
     this.retryPolicy = null;
   }
 
@@ -31,9 +32,28 @@ export class PendingRequest {
     return this.withHeader("Accept", "application/json");
   }
   asJson() {
-    this.sendJson = true;
-    if (this.attachments.length === 0)
-      this.withHeader("Content-Type", "application/json");
+    this.assertNoAttachments("JSON");
+    this.bodyMode = "json";
+    this.rawBody = null;
+    this.withHeader("Content-Type", "application/json");
+    return this;
+  }
+  asForm() {
+    this.assertNoAttachments("form");
+    this.bodyMode = "form";
+    this.rawBody = null;
+    this.withHeader("Content-Type", "application/x-www-form-urlencoded");
+    return this;
+  }
+  withBody(body, contentType = "text/plain") {
+    this.assertNoAttachments("raw body");
+    if (typeof body !== "string")
+      throw new TypeError("Fetch raw body must be a string.");
+    if (typeof contentType !== "string" || contentType.trim() === "")
+      throw new TypeError("Fetch raw body content type cannot be empty.");
+    this.bodyMode = "raw";
+    this.rawBody = body;
+    this.withHeader("Content-Type", contentType);
     return this;
   }
   timeout(seconds) {
@@ -47,6 +67,10 @@ export class PendingRequest {
     return this;
   }
   attach(name, path, filename = null, mimeType = null) {
+    if (this.bodyMode === "form" || this.bodyMode === "raw")
+      throw new TypeError(
+        "Fetch attachments cannot be combined with form or raw bodies.",
+      );
     if (typeof name !== "string" || name.trim() === "")
       throw new TypeError("Fetch attachment name cannot be empty.");
     if (typeof path !== "string" || path.trim() === "")
@@ -83,6 +107,8 @@ export class PendingRequest {
   get(url, query = {}) {
     if (this.attachments.length)
       throw new TypeError("Fetch attachments cannot be sent with GET.");
+    if (this.bodyMode !== "json" || this.rawBody !== null)
+      throw new TypeError("Fetch request bodies cannot be sent with GET.");
     return this.send("GET", url, query, {});
   }
   post(url, data = {}) {
@@ -144,7 +170,41 @@ export class PendingRequest {
         files: this.attachments.map((file) => ({ ...file })),
       };
     }
+    if (this.bodyMode === "raw") {
+      if (data && Object.keys(data).length)
+        throw new TypeError(
+          "Fetch raw bodies cannot be combined with method data.",
+        );
+      return { type: "raw", data: this.rawBody ?? "" };
+    }
+    if (this.bodyMode === "form")
+      return { type: "form", data: encodeForm(data) };
     if (!data || Object.keys(data).length === 0) return null;
-    return { type: this.sendJson ? "json" : "raw", data };
+    return { type: "json", data };
   }
+  assertNoAttachments(mode) {
+    if (this.attachments.length)
+      throw new TypeError(
+        `Fetch attachments cannot be combined with ${mode} bodies.`,
+      );
+  }
+}
+
+function encodeForm(data) {
+  const parameters = new URLSearchParams();
+  for (const [name, value] of Object.entries(data)) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      parameters.append(
+        name,
+        item === null
+          ? ""
+          : typeof item === "boolean"
+            ? item
+              ? "1"
+              : "0"
+            : String(item),
+      );
+    }
+  }
+  return parameters.toString();
 }

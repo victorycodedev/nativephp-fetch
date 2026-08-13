@@ -7,6 +7,7 @@ requests, uploads, and file downloads for NativePHP Mobile on iOS and Android.
 
 ```bash
 composer require victorycodedev/nativephp-fetch
+php artisan native:plugin:register victorycodedev/nativephp-fetch
 ```
 
 ## Requests and uploads
@@ -24,7 +25,7 @@ $requestId = $request->post($url, [
 ```
 
 Fetch supports GET, POST, PUT, PATCH, DELETE, headers, bearer tokens, query
-parameters, JSON bodies, cancellation, multipart fields, `attach()`,
+parameters, JSON, form and raw bodies, cancellation, multipart fields, `attach()`,
 `attachMany()`, multiple files, and overall upload progress.
 
 ```php
@@ -43,6 +44,57 @@ $requestId = Fetch::attachMany([
     ],
 ])->post($url, ['title' => 'My upload']);
 ```
+
+### JSON, form, and raw bodies
+
+JSON is the default for non-empty method data. Form values use RFC 1738
+encoding: spaces become `+`, booleans become `1`/`0`, `null` becomes an empty
+value, and top-level lists produce repeated field names.
+
+```php
+Fetch::asForm()->post($url, [
+    'name' => 'Victory Efe',
+    'tags' => ['php', 'native'],
+]);
+
+Fetch::withBody('<user>Victory</user>', 'application/xml')->post($url);
+Fetch::withBody('query { viewer { id } }', 'application/graphql')->post($url);
+```
+
+Raw bodies are strings intended for reasonably sized text or wire formats.
+Do not bridge large binary contents; use `attach()` or `attachMany()` so files
+remain file-backed. Form/raw modes cannot be combined with attachments, and a
+raw body cannot be combined with the method `$data` argument.
+
+### Completed responses
+
+Requests remain asynchronous: `Fetch::get()` returns a request ID, not a
+response. Construct `FetchResponse` from the unchanged completion event:
+
+```php
+use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
+use Victorycodedev\NativephpFetch\FetchResponse;
+
+#[On(FetchRequestCompleted::class)]
+public function completed(string $requestId, int $status, array $headers, string $body): void
+{
+    $response = FetchResponse::from($requestId, $status, $headers, $body);
+
+    $response->ok();          // exactly 200
+    $response->successful();  // 200–299
+    $response->redirect();    // 300–399
+    $response->failed();      // >= 400
+    $response->clientError(); // 400–499
+    $response->serverError(); // 500–599
+    $response->header('Content-Type'); // case-insensitive
+    $response->json('data.user.name'); // dot notation
+}
+```
+
+`json()` returns `null` for invalid/empty JSON, or the supplied default when a
+key is requested. Downloads retain their specialized completion event rather
+than pretending to be ordinary in-memory responses.
 
 ## Downloads
 
@@ -225,6 +277,8 @@ await Fetch.post(url, data);
 await Fetch.put(url, data);
 await Fetch.patch(url, data);
 await Fetch.delete(url, data);
+await Fetch.asForm().post(url, { name: 'Victory', tags: ['php', 'native'] });
+await Fetch.withBody('<user>Victory</user>', 'application/xml').post(url);
 ```
 
 Multipart uploads support repeated field names:
@@ -280,6 +334,73 @@ The native event names registered in `nativephp.json` can be consumed through
 NativePHP’s JavaScript event API. Download progress fields are `requestId`,
 `bytesReceived`, `bytesTotal`, and `progress`; the latter two are `null` when
 the response length is unknown.
+
+## Testing with fakes
+
+The PHP fake never invokes `nativephp_call`, so it works in ordinary Pest or
+PHPUnit tests. It synchronously dispatches the same started/completed events
+through Laravel's event dispatcher when one is available.
+
+```php
+use Victorycodedev\NativephpFetch\FetchResponse;
+use Victorycodedev\NativephpFetch\Testing\RecordedRequest;
+
+Fetch::fake([
+    'https://api.example.com/users/*' => FetchResponse::make(
+        status: 200,
+        body: ['data' => ['name' => 'Victory']],
+    ),
+]);
+
+Fetch::get('https://api.example.com/users/42');
+
+Fetch::assertSent(fn (RecordedRequest $request) =>
+    $request->method() === 'GET' && $request->url() === 'https://api.example.com/users/42'
+);
+Fetch::assertSentCount(1);
+Fetch::assertNotSent(fn (RecordedRequest $request) => $request->url() === 'https://other.test');
+Fetch::restore();
+```
+
+HTTP error statuses are completed responses, matching native request behavior.
+The fake intentionally does not emulate retry timing or progress streams.
+
+## Events and terminal behavior
+
+- `FetchRequestStarted`: `requestId`, `method`, `url`
+- `FetchRequestCompleted`: `requestId`, `status`, `headers`, `body`
+- `FetchRequestFailed`: `requestId`, `message`, nullable `code`
+- `FetchRequestCancelled`: `requestId`
+- `FetchRequestRetrying`: `requestId`, `attempt`, `maxAttempts`, `delayMs`, `reason`, nullable `status`
+- `FetchUploadProgress`: `requestId`, `bytesSent`, `bytesTotal`, `progress`
+- `FetchDownloadProgress`: `requestId`, `bytesReceived`, nullable `bytesTotal`, nullable `progress`
+- `FetchDownloadCompleted`: `requestId`, `status`, `headers`, `path`, `bytesReceived`
+
+Timeouts emit failure code `timeout`; only explicit `cancel()` calls emit the
+cancelled event. A request ID is generated before bridge execution and remains
+stable across retry attempts.
+
+## Platform, security, and compatibility
+
+- Requires NativePHP Mobile `^4.1`; supports iOS 18+ and Android API 29+.
+- Android uses OkHttp 4.12.0 and requests only `android.permission.INTERNET`.
+- iOS uses Foundation `URLSession` with no external dependency or permission.
+- Fetch follows platform redirect handling. Validate untrusted URLs and avoid
+  forwarding authorization headers to hosts you do not control.
+- Authorization values, request bodies, and file contents are not logged.
+- Upload files must be readable; downloads are limited to writable app paths,
+  use destination locking, `.part` cleanup, and explicit overwrite consent.
+- Concurrent requests are supported. Downloads retry from byte zero.
+- Retrying POST/PATCH/other non-idempotent operations can repeat side effects;
+  choose retry status rules and server idempotency keys accordingly.
+
+## Development and support
+
+Run `composer validate --strict`, `composer dump-autoload -o`, `vendor/bin/pest`,
+and `node --test resources/js/fetch.test.js`. Native changes must additionally
+be compiled in a generated NativePHP v4 app and exercised on simulators,
+emulators, and physical iOS/Android devices. Report issues through the
+[GitHub issue tracker](https://github.com/victorycodedev/nativephp-fetch/issues).
 
 ## Download behavior and limitations
 

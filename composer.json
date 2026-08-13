@@ -3,6 +3,12 @@
     "description": "Truly asynchronous native HTTP networking for NativePHP Mobile on iOS and Android.",
     "type": "nativephp-plugin",
     "license": "MIT",
+    "homepage": "https://github.com/victorycodedev/nativephp-fetch",
+    "keywords": ["nativephp", "android", "ios", "http", "networking", "uploads", "downloads"],
+    "support": {
+        "issues": "https://github.com/victorycodedev/nativephp-fetch/issues",
+        "source": "https://github.com/victorycodedev/nativephp-fetch"
+    },
     "authors": [
         {
             "name": "Victory Efekpogua"

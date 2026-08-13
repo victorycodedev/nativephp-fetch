@@ -833,6 +833,14 @@ private object FetchClient {
                     )
                 }
             }
+            "form" -> BodyBuildResult(
+                body = (body["data"] as? String ?: "").toRequestBody(
+                    "application/x-www-form-urlencoded; charset=utf-8".toMediaType()
+                )
+            )
+            "raw" -> BodyBuildResult(
+                body = (body["data"] as? String ?: "").toRequestBody(null)
+            )
             "multipart" -> {
                 buildMultipartRequestBody(
                     activity = activity,

@@ -2,11 +2,49 @@
 
 namespace Victorycodedev\NativephpFetch;
 
+use Closure;
+use Victorycodedev\NativephpFetch\Testing\FakeFetch;
+
 class Fetch
 {
+    protected ?FakeFetch $fake = null;
+
+    public function fake(array $responses = []): FakeFetch
+    {
+        return $this->fake = new FakeFetch($responses);
+    }
+
+    public function restore(): void
+    {
+        $this->fake = null;
+    }
+
+    public function isFaking(): bool
+    {
+        return $this->fake !== null;
+    }
+
+    public function fakeInstance(): ?FakeFetch
+    {
+        return $this->fake;
+    }
+
+    public function assertSent(Closure $callback): void
+    {
+        $this->requireFake()->assertSent($callback);
+    }
+    public function assertNotSent(?Closure $callback = null): void
+    {
+        $this->requireFake()->assertNotSent($callback);
+    }
+    public function assertSentCount(int $count): void
+    {
+        $this->requireFake()->assertSentCount($count);
+    }
+
     public function request(): PendingRequest
     {
-        return new PendingRequest();
+        return new PendingRequest($this->fake);
     }
 
     public function withHeaders(array $headers): PendingRequest
@@ -34,6 +72,16 @@ class Fetch
     public function asJson(): PendingRequest
     {
         return $this->request()->asJson();
+    }
+
+    public function asForm(): PendingRequest
+    {
+        return $this->request()->asForm();
+    }
+
+    public function withBody(string $body, string $contentType = 'text/plain'): PendingRequest
+    {
+        return $this->request()->withBody($body, $contentType);
     }
 
     public function timeout(int $seconds): PendingRequest
@@ -128,5 +176,10 @@ class Fetch
     public function cancel(string $requestId): bool
     {
         return $this->request()->cancel($requestId);
+    }
+
+    protected function requireFake(): FakeFetch
+    {
+        return $this->fake ?? throw new \LogicException('Fetch assertions require Fetch::fake().');
     }
 }

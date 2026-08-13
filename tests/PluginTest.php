@@ -132,6 +132,8 @@ describe('JavaScript Client', function () {
             'export const patch =',
             'export const del =',
             'export const download =',
+            'export const asForm =',
+            'export const withBody =',
         );
     });
 });

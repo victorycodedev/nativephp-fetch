@@ -10,6 +10,9 @@ export const withToken = (token, type = "Bearer") =>
   request().withToken(token, type);
 export const acceptJson = () => request().acceptJson();
 export const asJson = () => request().asJson();
+export const asForm = () => request().asForm();
+export const withBody = (body, contentType = "text/plain") =>
+  request().withBody(body, contentType);
 export const timeout = (seconds) => request().timeout(seconds);
 export const retry = (options = 3) => request().retry(options);
 export const attach = (name, path, filename = null, mimeType = null) =>
@@ -31,6 +34,8 @@ export const Fetch = {
   withToken,
   acceptJson,
   asJson,
+  asForm,
+  withBody,
   timeout,
   retry,
   attach,
