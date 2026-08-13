@@ -1,0 +1,73 @@
+{
+    "name": "victorycodedev/nativephp-fetch",
+    "version": "1.0.0",
+    "description": "Truly asynchronous native HTTP networking for NativePHP Mobile on iOS and Android.",
+    "namespace": "Fetch",
+    "keywords": [],
+    "category": "utilities",
+    "license": "MIT",
+    "pricing": {
+        "type": "free"
+    },
+    "author": {
+        "name": "Your Name",
+        "email": "you@example.com",
+        "url": ""
+    },
+    "homepage": "",
+    "repository": "",
+    "funding": [],
+    "platforms": [
+        "android",
+        "ios"
+    ],
+    "icon": "resources/icon.png",
+    "screenshots": [],
+    "bridge_functions": [
+        {
+            "name": "Fetch.Execute",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Execute",
+            "ios": "FetchFunctions.Execute",
+            "description": "Execute the plugin functionality"
+        },
+        {
+            "name": "Fetch.GetStatus",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.GetStatus",
+            "ios": "FetchFunctions.GetStatus",
+            "description": "Get the current status"
+        }
+    ],
+    "android": {
+        "min_version": 21,
+        "permissions": [],
+        "repositories": [],
+        "dependencies": {
+            "implementation": []
+        },
+        "activities": [],
+        "services": [],
+        "receivers": [],
+        "providers": []
+    },
+    "ios": {
+        "min_version": "15.0",
+        "permissions": [],
+        "repositories": [],
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        }
+    },
+    "assets": {
+        "android": [],
+        "ios": []
+    },
+    "secrets": [],
+    "events": [
+        "Victorycodedev\\NativephpFetch\\Events\\FetchCompleted"
+    ],
+    "service_provider": "Victorycodedev\\NativephpFetch\\FetchServiceProvider",
+    "hooks": {
+        "copy_assets": "nativephp:fetch:copy-assets"
+    }
+}
