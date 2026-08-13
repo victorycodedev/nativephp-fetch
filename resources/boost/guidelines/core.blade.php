@@ -1,61 +1,46 @@
 ## victorycodedev/nativephp-fetch
 
-Truly asynchronous native HTTP networking for NativePHP Mobile on iOS and Android.
+Fetch provides asynchronous native HTTP requests, multipart uploads, and
+streaming downloads for NativePHP Mobile.
 
-### Installation
-
-```bash
-composer require victorycodedev/nativephp-fetch
-```
-
-### PHP Usage (Livewire/Blade)
-
-Use the `Fetch` facade:
+### Requests
 
 @verbatim
-<code-snippet name="Using Fetch Facade" lang="php">
+<code-snippet name="Using Fetch" lang="php">
 use Victorycodedev\NativephpFetch\Facades\Fetch;
 
-// Execute the plugin functionality
-$result = Fetch::execute(['option1' => 'value']);
-
-// Get the current status
-$status = Fetch::getStatus();
+$requestId = Fetch::withToken($token)
+    ->timeout(30)
+    ->post($url, ['name' => 'Victory']);
 </code-snippet>
 @endverbatim
 
-### Available Methods
+### Downloads
 
-- `Fetch::execute()`: Execute the plugin functionality
-- `Fetch::getStatus()`: Get the current status
-
-### Events
-
-- `FetchCompleted`: Listen with `#[OnNative(FetchCompleted::class)]`
+Create the request first when a NativeComponent must store its ID before
+progress events can arrive.
 
 @verbatim
-<code-snippet name="Listening for Fetch Events" lang="php">
-use Native\Mobile\Attributes\OnNative;
-use Victorycodedev\NativephpFetch\Events\FetchCompleted;
+<code-snippet name="Downloading with Fetch" lang="php">
+$request = Fetch::withToken($token)->timeout(60);
+$this->requestId = $request->id();
 
-#[OnNative(FetchCompleted::class)]
-public function handleFetchCompleted($result, $id = null)
-{
-    // Handle the event
-}
+$request->download(
+    $url,
+    storage_path('app/downloads/file.pdf'),
+);
 </code-snippet>
 @endverbatim
 
-### JavaScript Usage (Vue/React/Inertia)
+Listen from a live NativeComponent with
+`#[On(FetchDownloadProgress::class)]`. Unknown content lengths produce `null`
+for both `bytesTotal` and `progress`. Downloads target application-writable
+paths and do not transfer binary contents through PHP.
 
-@verbatim
-<code-snippet name="Using Fetch in JavaScript" lang="javascript">
-import { fetch } from '@victorycodedev/nativephp-fetch';
+### JavaScript
 
-// Execute the plugin functionality
-const result = await fetch.execute({ option1: 'value' });
-
-// Get the current status
-const status = await fetch.getStatus();
-</code-snippet>
-@endverbatim
+For NativePHP v4 Inertia/Vue/React or legacy web-view frontends, import the
+official client from `resources/js/fetch.js`. It exposes `Fetch.get()`,
+`post()`, `put()`, `patch()`, `delete()`, `download()`, `cancel()`, and fluent
+request configuration matching the PHP API. Prefer the PHP facade inside
+NativeComponents.

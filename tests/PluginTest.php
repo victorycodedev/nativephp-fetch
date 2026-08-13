@@ -36,7 +36,9 @@ describe('Plugin Manifest', function () {
 
         foreach ($manifest['bridge_functions'] as $function) {
             expect($function)->toHaveKeys(['name']);
-            expect($function)->toHaveAnyKeys(['android', 'ios']);
+            expect(
+                isset($function['android']) || isset($function['ios'])
+            )->toBeTrue();
         }
     });
 
@@ -63,7 +65,7 @@ describe('Plugin Manifest', function () {
 
 describe('Native Code', function () {
     it('has Android Kotlin file', function () {
-        $kotlinFile = $this->pluginPath . '/resources/android/FetchFunctions.kt';
+        $kotlinFile = $this->pluginPath . '/resources/android/src/FetchFunctions.kt';
 
         expect(file_exists($kotlinFile))->toBeTrue();
 
@@ -74,7 +76,7 @@ describe('Native Code', function () {
     });
 
     it('has iOS Swift file', function () {
-        $swiftFile = $this->pluginPath . '/resources/ios/FetchFunctions.swift';
+        $swiftFile = $this->pluginPath . '/resources/ios/Sources/FetchFunctions.swift';
 
         expect(file_exists($swiftFile))->toBeTrue();
 
@@ -86,8 +88,8 @@ describe('Native Code', function () {
     it('has matching bridge function classes in native code', function () {
         $manifest = json_decode(file_get_contents($this->manifestPath), true);
 
-        $kotlinFile = $this->pluginPath . '/resources/android/FetchFunctions.kt';
-        $swiftFile = $this->pluginPath . '/resources/ios/FetchFunctions.swift';
+        $kotlinFile = $this->pluginPath . '/resources/android/src/FetchFunctions.kt';
+        $swiftFile = $this->pluginPath . '/resources/ios/Sources/FetchFunctions.swift';
 
         $kotlinContent = file_get_contents($kotlinFile);
         $swiftContent = file_get_contents($swiftFile);
@@ -106,6 +108,25 @@ describe('Native Code', function () {
                 expect($swiftContent)->toContain("class {$className}");
             }
         }
+    });
+});
+
+describe('JavaScript Client', function () {
+    it('exports every bridge function and public request method', function () {
+        $file = $this->pluginPath . '/resources/js/fetch.js';
+        $content = file_get_contents($file);
+
+        expect($content)->toContain(
+            'Fetch.Start',
+            'Fetch.Download',
+            'Fetch.Cancel',
+            'export const get =',
+            'export const post =',
+            'export const put =',
+            'export const patch =',
+            'export const del =',
+            'export const download =',
+        );
     });
 });
 

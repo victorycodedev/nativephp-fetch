@@ -95,6 +95,20 @@ class Fetch
         return $this->request()->delete($url, $data);
     }
 
+    public function download(
+        string $url,
+        string $destination,
+        array $query = [],
+        bool $overwrite = false,
+    ): string {
+        return $this->request()->download(
+            $url,
+            $destination,
+            $query,
+            $overwrite,
+        );
+    }
+
     public function cancel(string $requestId): bool
     {
         return $this->request()->cancel($requestId);

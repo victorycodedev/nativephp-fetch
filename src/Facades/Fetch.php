@@ -20,6 +20,7 @@ use Victorycodedev\NativephpFetch\PendingRequest;
  * @method static string put(string $url, array $data = [])
  * @method static string patch(string $url, array $data = [])
  * @method static string delete(string $url, array $data = [])
+ * @method static string download(string $url, string $destination, array $query = [], bool $overwrite = false)
  * @method static bool cancel(string $requestId)
  *
  * @see \Victorycodedev\NativephpFetch\Fetch

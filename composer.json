@@ -10,7 +10,8 @@
     ],
     "require": {
         "php": "^8.3",
-        "nativephp/mobile": "^4.1"
+        "nativephp/mobile": "^4.1",
+        "ramsey/uuid": "^4.7"
     },
     "autoload": {
         "psr-4": {

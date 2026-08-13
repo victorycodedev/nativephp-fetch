@@ -254,6 +254,49 @@ class PendingRequest
         );
     }
 
+    public function download(
+        string $url,
+        string $destination,
+        array $query = [],
+        bool $overwrite = false,
+    ): string {
+        if (trim($destination) === '') {
+            throw new FetchException(
+                'Fetch download destination cannot be empty.'
+            );
+        }
+
+        $requestId = $this->requestId;
+
+        $response = $this->bridgeCall(
+            'Fetch.Download',
+            [
+                'request_id' => $requestId,
+                'url' => $url,
+                'destination' => $destination,
+                'headers' => $this->headers,
+                'query' => $query,
+                'timeout' => $this->timeout,
+                'overwrite' => $overwrite,
+            ],
+        );
+
+        if ($this->isErrorResponse($response)) {
+            throw new FetchException(
+                $response['message']
+                    ?? 'Fetch was unable to start the native download.'
+            );
+        }
+
+        if (($response['accepted'] ?? false) !== true) {
+            throw new FetchException(
+                'Fetch was unable to start the native download.'
+            );
+        }
+
+        return $requestId;
+    }
+
     public function cancel(string $requestId): bool
     {
         $response = $this->bridgeCall(

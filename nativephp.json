@@ -37,6 +37,12 @@
             "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Cancel",
             "ios": "FetchFunctions.Cancel",
             "description": "Cancel an active asynchronous HTTP request"
+        },
+        {
+            "name": "Fetch.Download",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Download",
+            "ios": "FetchFunctions.Download",
+            "description": "Stream an HTTP response to an application-writable file"
         }
     ],
     "android": {
@@ -74,7 +80,9 @@
         "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCompleted",
         "Victorycodedev\\NativephpFetch\\Events\\FetchRequestFailed",
         "Victorycodedev\\NativephpFetch\\Events\\FetchRequestCancelled",
-        "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress"
+        "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
     ],
     "service_provider": "Victorycodedev\\NativephpFetch\\FetchServiceProvider",
     "hooks": {

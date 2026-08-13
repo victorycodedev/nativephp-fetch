@@ -1,6 +1,8 @@
 import Foundation
 
-private final class FetchClient: NSObject, URLSessionTaskDelegate {
+private final class FetchClient: NSObject,
+    URLSessionTaskDelegate,
+    URLSessionDownloadDelegate {
 
     static let shared = FetchClient()
 
@@ -19,6 +21,12 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
     private static let eventUploadProgress =
         "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress"
 
+    private static let eventDownloadProgress =
+        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress"
+
+    private static let eventDownloadCompleted =
+        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
+
     private let lock = NSLock()
 
     private var tasks: [String: URLSessionTask] = [:]
@@ -26,6 +34,12 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
     private var requestIdsByTaskIdentifier: [Int: String] = [:]
 
     private var temporaryUploadFiles: [String: URL] = [:]
+
+    private var uploadProgressTimes: [String: TimeInterval] = [:]
+
+    private var downloads: [String: DownloadState] = [:]
+
+    private var activeDownloadDestinations: [String: String] = [:]
 
     private lazy var session: URLSession = {
         URLSession(
@@ -193,6 +207,180 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
         task.resume()
     }
 
+    func download(
+        requestId: String,
+        urlString: String,
+        destinationPath: String,
+        headers: [String: String],
+        query: [String: Any],
+        timeout: TimeInterval,
+        overwrite: Bool
+    ) throws {
+        guard !destinationPath.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty else {
+            throw FetchNativeError.download(
+                code: "invalid_destination",
+                message: "The download destination is invalid."
+            )
+        }
+
+        guard var components = URLComponents(string: urlString) else {
+            throw FetchNativeError.invalidURL
+        }
+
+        var queryItems = components.queryItems ?? []
+        for (name, value) in query {
+            if let values = value as? [Any] {
+                for item in values {
+                    queryItems.append(
+                        URLQueryItem(
+                            name: name,
+                            value: String(describing: item)
+                        )
+                    )
+                }
+            } else {
+                queryItems.append(
+                    URLQueryItem(
+                        name: name,
+                        value: String(describing: value)
+                    )
+                )
+            }
+        }
+
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+
+        guard let url = components.url else {
+            throw FetchNativeError.invalidURL
+        }
+
+        let destination = URL(fileURLWithPath: destinationPath)
+            .standardizedFileURL
+        let destinationKey = destination.path
+        let parent = destination.deletingLastPathComponent()
+        let fileManager = FileManager.default
+
+        guard !destination.lastPathComponent.isEmpty else {
+            throw FetchNativeError.download(
+                code: "invalid_destination",
+                message: "The download destination is invalid."
+            )
+        }
+
+        do {
+            try fileManager.createDirectory(
+                at: parent,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            throw FetchNativeError.download(
+                code: "destination_unwritable",
+                message: "The download destination directory could not be created."
+            )
+        }
+
+        guard fileManager.isWritableFile(atPath: parent.path) else {
+            throw FetchNativeError.download(
+                code: "destination_unwritable",
+                message: "The download destination directory is not writable."
+            )
+        }
+
+        if fileManager.fileExists(atPath: destination.path), !overwrite {
+            throw FetchNativeError.download(
+                code: "destination_exists",
+                message: "The download destination already exists."
+            )
+        }
+
+        let partial = parent.appendingPathComponent(
+            ".fetch-\(requestId).part"
+        )
+
+        lock.lock()
+        let requestInUse = tasks[requestId] != nil
+        let destinationInUse =
+            activeDownloadDestinations[destinationKey] != nil
+
+        if !requestInUse && !destinationInUse {
+            activeDownloadDestinations[destinationKey] = requestId
+        }
+        lock.unlock()
+
+        guard !requestInUse else {
+            throw FetchNativeError.download(
+                code: "network_error",
+                message: "This request ID already has an active operation."
+            )
+        }
+
+        guard !destinationInUse else {
+            throw FetchNativeError.download(
+                code: "destination_exists",
+                message: "Another download is already using this destination."
+            )
+        }
+
+        do {
+            if fileManager.fileExists(atPath: partial.path) {
+                try fileManager.removeItem(at: partial)
+            }
+
+            var request = URLRequest(
+                url: url,
+                cachePolicy: .useProtocolCachePolicy,
+                timeoutInterval: timeout
+            )
+            request.httpMethod = "GET"
+
+            for (name, value) in headers {
+                request.setValue(value, forHTTPHeaderField: name)
+            }
+
+            let task = session.downloadTask(with: request)
+            let state = DownloadState(
+                requestId: requestId,
+                destination: destination,
+                destinationKey: destinationKey,
+                partial: partial,
+                overwrite: overwrite
+            )
+
+            lock.lock()
+            tasks[requestId] = task
+            requestIdsByTaskIdentifier[task.taskIdentifier] = requestId
+            downloads[requestId] = state
+            lock.unlock()
+
+            emitStarted(
+                requestId: requestId,
+                method: "GET",
+                url: url.absoluteString
+            )
+
+            task.resume()
+        } catch let error as FetchNativeError {
+            releaseDownloadDestination(
+                destinationKey,
+                requestId: requestId
+            )
+            throw error
+        } catch {
+            releaseDownloadDestination(
+                destinationKey,
+                requestId: requestId
+            )
+            throw FetchNativeError.download(
+                code: "destination_unwritable",
+                message: "The partial download file could not be prepared."
+            )
+        }
+    }
+
     func cancel(
         requestId: String
     ) -> Bool {
@@ -201,6 +389,15 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
 
         let task =
             tasks[requestId]
+
+        if let state = downloads[requestId] {
+            if state.terminal {
+                lock.unlock()
+                return false
+            }
+
+            state.cancelled = true
+        }
 
         lock.unlock()
 
@@ -227,9 +424,23 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
                 task.taskIdentifier
             ]
 
+        let now = Date().timeIntervalSince1970
+        let previous = requestId.flatMap {
+            uploadProgressTimes[$0]
+        } ?? 0
+        let finished = totalBytesExpectedToSend > 0
+            && totalBytesSent >= totalBytesExpectedToSend
+        let shouldEmit = previous == 0
+            || finished
+            || now - previous >= 0.1
+
+        if let requestId, shouldEmit {
+            uploadProgressTimes[requestId] = now
+        }
+
         lock.unlock()
 
-        guard let requestId else {
+        guard let requestId, shouldEmit else {
             return
         }
 
@@ -254,6 +465,207 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
             bytesTotal: total,
             progress: progress
         )
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        lock.lock()
+
+        guard let requestId = requestIdsByTaskIdentifier[
+            downloadTask.taskIdentifier
+        ], let state = downloads[requestId],
+           !state.cancelled,
+           !state.terminal else {
+            lock.unlock()
+            return
+        }
+
+        let now = Date().timeIntervalSince1970
+        let total = totalBytesExpectedToWrite >= 0
+            ? totalBytesExpectedToWrite
+            : nil
+        let finished = total.map {
+            totalBytesWritten >= $0
+        } ?? false
+        let shouldEmit = finished || now - state.lastProgressAt >= 0.1
+
+        if shouldEmit {
+            state.lastProgressAt = now
+        }
+
+        lock.unlock()
+
+        if shouldEmit {
+            emitDownloadProgress(
+                requestId: requestId,
+                bytesReceived: totalBytesWritten,
+                bytesTotal: total
+            )
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        lock.lock()
+
+        guard let requestId = requestIdsByTaskIdentifier[
+            downloadTask.taskIdentifier
+        ], let state = downloads[requestId],
+           !state.terminal else {
+            lock.unlock()
+            return
+        }
+
+        if state.cancelled {
+            lock.unlock()
+            finishDownload(
+                requestId: requestId,
+                cancelled: true
+            )
+            return
+        }
+
+        guard let response = downloadTask.response as? HTTPURLResponse else {
+            lock.unlock()
+            finishDownload(
+                requestId: requestId,
+                message: "The server returned an invalid HTTP response.",
+                code: "network_error"
+            )
+            return
+        }
+
+        guard (200...299).contains(response.statusCode) else {
+            lock.unlock()
+            finishDownload(
+                requestId: requestId,
+                message: "Download failed with HTTP \(response.statusCode).",
+                code: "http_error"
+            )
+            return
+        }
+
+        if downloadTask.countOfBytesExpectedToReceive >= 0,
+           downloadTask.countOfBytesReceived
+            != downloadTask.countOfBytesExpectedToReceive {
+            lock.unlock()
+            finishDownload(
+                requestId: requestId,
+                message: "The server closed the download before all bytes were received.",
+                code: "network_error"
+            )
+            return
+        }
+
+        do {
+            try promoteDownload(
+                location: location,
+                state: state
+            )
+
+            state.terminal = true
+            removeDownloadStateLocked(
+                requestId: requestId,
+                taskIdentifier: downloadTask.taskIdentifier,
+                destinationKey: state.destinationKey
+            )
+            lock.unlock()
+
+            let bytesReceived = max(
+                downloadTask.countOfBytesReceived,
+                0
+            )
+            let expected = downloadTask.countOfBytesExpectedToReceive >= 0
+                ? downloadTask.countOfBytesExpectedToReceive
+                : nil
+
+            emitDownloadProgress(
+                requestId: requestId,
+                bytesReceived: bytesReceived,
+                bytesTotal: expected,
+                forceComplete: expected != nil
+            )
+            emitDownloadCompleted(
+                requestId: requestId,
+                status: response.statusCode,
+                headers: responseHeaders(response),
+                path: state.destination.path,
+                bytesReceived: bytesReceived
+            )
+        } catch let error as FetchNativeError {
+            lock.unlock()
+
+            if case let .download(code, message) = error {
+                finishDownload(
+                    requestId: requestId,
+                    message: message,
+                    code: code
+                )
+            } else {
+                finishDownload(
+                    requestId: requestId,
+                    message: "The completed download could not be moved into place.",
+                    code: "move_failed"
+                )
+            }
+        } catch {
+            lock.unlock()
+            finishDownload(
+                requestId: requestId,
+                message: "The completed download could not be moved into place.",
+                code: "move_failed"
+            )
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        lock.lock()
+        let requestId = requestIdsByTaskIdentifier[task.taskIdentifier]
+        let isDownload = requestId.flatMap { downloads[$0] } != nil
+        lock.unlock()
+
+        guard isDownload, let requestId else {
+            return
+        }
+
+        if let urlError = error as? URLError {
+            if urlError.code == .cancelled {
+                finishDownload(
+                    requestId: requestId,
+                    cancelled: true
+                )
+            } else {
+                finishDownload(
+                    requestId: requestId,
+                    message: urlError.localizedDescription,
+                    code: failureCode(urlError)
+                )
+            }
+        } else if let error {
+            finishDownload(
+                requestId: requestId,
+                message: error.localizedDescription,
+                code: "network_error"
+            )
+        } else {
+            finishDownload(
+                requestId: requestId,
+                message: "The download ended before its file was finalized.",
+                code: "network_error"
+            )
+        }
     }
 
     private func handleCompletion(
@@ -610,6 +1022,10 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
                     forKey: requestId
                 )
 
+        uploadProgressTimes.removeValue(
+            forKey: requestId
+        )
+
         lock.unlock()
 
         if let temporaryURL {
@@ -618,6 +1034,141 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
                     at: temporaryURL
                 )
         }
+    }
+
+    private func promoteDownload(
+        location: URL,
+        state: DownloadState
+    ) throws {
+        let fileManager = FileManager.default
+
+        if fileManager.fileExists(atPath: state.partial.path) {
+            try? fileManager.removeItem(at: state.partial)
+        }
+
+        do {
+            try fileManager.moveItem(
+                at: location,
+                to: state.partial
+            )
+        } catch {
+            throw FetchNativeError.download(
+                code: "write_failed",
+                message: "The downloaded temporary file could not be prepared."
+            )
+        }
+
+        do {
+            let destinationExists = fileManager.fileExists(
+                atPath: state.destination.path
+            )
+
+            if destinationExists, !state.overwrite {
+                throw FetchNativeError.download(
+                    code: "destination_exists",
+                    message: "The download destination already exists."
+                )
+            }
+
+            if destinationExists {
+                _ = try fileManager.replaceItemAt(
+                    state.destination,
+                    withItemAt: state.partial
+                )
+            } else {
+                try fileManager.moveItem(
+                    at: state.partial,
+                    to: state.destination
+                )
+            }
+        } catch let error as FetchNativeError {
+            try? fileManager.removeItem(at: state.partial)
+            throw error
+        } catch {
+            try? fileManager.removeItem(at: state.partial)
+            throw FetchNativeError.download(
+                code: "move_failed",
+                message: "The completed download could not be moved into place."
+            )
+        }
+    }
+
+    private func finishDownload(
+        requestId: String,
+        cancelled: Bool = false,
+        message: String = "The download failed.",
+        code: String = "network_error"
+    ) {
+        lock.lock()
+
+        guard let state = downloads[requestId],
+              !state.terminal else {
+            lock.unlock()
+            return
+        }
+
+        state.terminal = true
+        let taskIdentifier = tasks[requestId]?.taskIdentifier
+
+        removeDownloadStateLocked(
+            requestId: requestId,
+            taskIdentifier: taskIdentifier,
+            destinationKey: state.destinationKey
+        )
+        lock.unlock()
+
+        try? FileManager.default.removeItem(at: state.partial)
+
+        if cancelled || state.cancelled {
+            emitCancelled(requestId: requestId)
+        } else {
+            emitFailure(
+                requestId: requestId,
+                message: message,
+                code: code
+            )
+        }
+    }
+
+    private func removeDownloadStateLocked(
+        requestId: String,
+        taskIdentifier: Int?,
+        destinationKey: String
+    ) {
+        tasks.removeValue(forKey: requestId)
+        downloads.removeValue(forKey: requestId)
+        activeDownloadDestinations.removeValue(forKey: destinationKey)
+
+        if let taskIdentifier {
+            requestIdsByTaskIdentifier.removeValue(
+                forKey: taskIdentifier
+            )
+        }
+    }
+
+    private func releaseDownloadDestination(
+        _ destinationKey: String,
+        requestId: String
+    ) {
+        lock.lock()
+        if activeDownloadDestinations[destinationKey] == requestId {
+            activeDownloadDestinations.removeValue(
+                forKey: destinationKey
+            )
+        }
+        lock.unlock()
+    }
+
+    private func responseHeaders(
+        _ response: HTTPURLResponse
+    ) -> [String: String] {
+        var headers: [String: String] = [:]
+
+        for (key, value) in response.allHeaderFields {
+            headers[String(describing: key)] = String(describing: value)
+        }
+
+        return headers
     }
 
     private func emitStarted(
@@ -700,6 +1251,60 @@ private final class FetchClient: NSObject, URLSessionTaskDelegate {
         )
     }
 
+    private func emitDownloadProgress(
+        requestId: String,
+        bytesReceived: Int64,
+        bytesTotal: Int64?,
+        forceComplete: Bool = false
+    ) {
+        let progress: Double?
+
+        if forceComplete {
+            progress = 1
+        } else if let bytesTotal, bytesTotal > 0 {
+            progress = min(
+                max(Double(bytesReceived) / Double(bytesTotal), 0),
+                1
+            )
+        } else if bytesTotal == 0 {
+            progress = 0
+        } else {
+            progress = nil
+        }
+
+        let totalValue: Any = bytesTotal.map { $0 } ?? NSNull()
+        let progressValue: Any = progress.map { $0 } ?? NSNull()
+
+        dispatchEvent(
+            name: Self.eventDownloadProgress,
+            payload: [
+                "requestId": requestId,
+                "bytesReceived": max(bytesReceived, 0),
+                "bytesTotal": totalValue,
+                "progress": progressValue,
+            ]
+        )
+    }
+
+    private func emitDownloadCompleted(
+        requestId: String,
+        status: Int,
+        headers: [String: String],
+        path: String,
+        bytesReceived: Int64
+    ) {
+        dispatchEvent(
+            name: Self.eventDownloadCompleted,
+            payload: [
+                "requestId": requestId,
+                "status": status,
+                "headers": headers,
+                "path": path,
+                "bytesReceived": bytesReceived,
+            ]
+        )
+    }
+
     private func dispatchEvent(
         name: String,
         payload: [String: Any]
@@ -749,6 +1354,31 @@ private struct MultipartBuildResult {
     let boundary: String
 }
 
+private final class DownloadState {
+    let requestId: String
+    let destination: URL
+    let destinationKey: String
+    let partial: URL
+    let overwrite: Bool
+    var cancelled = false
+    var terminal = false
+    var lastProgressAt: TimeInterval = 0
+
+    init(
+        requestId: String,
+        destination: URL,
+        destinationKey: String,
+        partial: URL,
+        overwrite: Bool
+    ) {
+        self.requestId = requestId
+        self.destination = destination
+        self.destinationKey = destinationKey
+        self.partial = partial
+        self.overwrite = overwrite
+    }
+}
+
 private enum FetchNativeError: Error {
 
     case invalidURL
@@ -756,6 +1386,7 @@ private enum FetchNativeError: Error {
     case invalidFile
     case fileNotFound(String)
     case multipartBuildFailed
+    case download(code: String, message: String)
 }
 
 enum FetchFunctions {
@@ -908,6 +1539,82 @@ enum FetchFunctions {
                     "cancelled": cancelled,
                 ]
             )
+        }
+    }
+
+    class Download: BridgeFunction {
+
+        func execute(
+            parameters: [String: Any]
+        ) throws -> [String: Any] {
+            guard let requestId = parameters["request_id"] as? String else {
+                return BridgeResponse.error(
+                    code: "fetch.missing_request_id",
+                    message: "Fetch.Download requires request_id."
+                )
+            }
+
+            guard let url = parameters["url"] as? String else {
+                return BridgeResponse.error(
+                    code: "fetch.missing_url",
+                    message: "Fetch.Download requires url."
+                )
+            }
+
+            guard let destination = parameters["destination"] as? String else {
+                return BridgeResponse.error(
+                    code: "fetch.invalid_destination",
+                    message: "Fetch.Download requires destination."
+                )
+            }
+
+            let timeout = (parameters["timeout"] as? NSNumber)?.doubleValue
+                ?? 30
+            let overwrite = parameters["overwrite"] as? Bool
+                ?? false
+            let query = parameters["query"] as? [String: Any]
+                ?? [:]
+            var headers: [String: String] = [:]
+
+            if let rawHeaders = parameters["headers"] as? [String: Any] {
+                for (name, value) in rawHeaders {
+                    headers[name] = String(describing: value)
+                }
+            }
+
+            do {
+                try FetchClient.shared.download(
+                    requestId: requestId,
+                    urlString: url,
+                    destinationPath: destination,
+                    headers: headers,
+                    query: query,
+                    timeout: timeout,
+                    overwrite: overwrite
+                )
+
+                return BridgeResponse.success(
+                    data: [
+                        "accepted": true,
+                        "request_id": requestId,
+                    ]
+                )
+            } catch FetchNativeError.invalidURL {
+                return BridgeResponse.error(
+                    code: "fetch.invalid_url",
+                    message: "The supplied URL is invalid."
+                )
+            } catch let FetchNativeError.download(code, message) {
+                return BridgeResponse.error(
+                    code: "fetch.\(code)",
+                    message: message
+                )
+            } catch {
+                return BridgeResponse.error(
+                    code: "fetch.download_failed",
+                    message: error.localizedDescription
+                )
+            }
         }
     }
 }
