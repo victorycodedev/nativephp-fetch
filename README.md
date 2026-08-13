@@ -222,7 +222,7 @@ Cancellation stops either an active attempt or a pending retry delay.
 
 Uploads reopen their file-backed bodies and progress resets to zero for each
 attempt. Downloads remove the failed attempt’s partial file and restart at byte
-zero; resumable Range downloads are not part supported.
+zero; resumable Range downloads are not supported.
 
 ```php
 use Victorycodedev\NativephpFetch\Events\FetchRequestRetrying;
