@@ -4,7 +4,15 @@
     "type": "nativephp-plugin",
     "license": "MIT",
     "homepage": "https://github.com/victorycodedev/nativephp-fetch",
-    "keywords": ["nativephp", "android", "ios", "http", "networking", "uploads", "downloads"],
+    "keywords": [
+        "nativephp",
+        "android",
+        "ios",
+        "http",
+        "networking",
+        "uploads",
+        "downloads"
+    ],
     "support": {
         "issues": "https://github.com/victorycodedev/nativephp-fetch/issues",
         "source": "https://github.com/victorycodedev/nativephp-fetch"
