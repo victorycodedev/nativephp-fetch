@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-08-14
+
 ### Added
 
 - Asynchronous native HTTP requests on Android and iOS.
@@ -21,4 +23,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request fakes, recorded-request assertions, and lifecycle event data objects.
 - NativePHP marketplace metadata and PHP and JavaScript usage documentation.
 
-[Unreleased]: https://github.com/victorycodedev/nativephp-fetch/commits/main
+[Unreleased]: https://github.com/victorycodedev/nativephp-fetch/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/victorycodedev/nativephp-fetch/releases/tag/v1.0.0
