@@ -23,7 +23,7 @@
         }
     ],
     "require": {
-        "php": "^8.3",
+        "php": "^8.4",
         "nativephp/mobile": "^4.1",
         "ramsey/uuid": "^4.7"
     },
