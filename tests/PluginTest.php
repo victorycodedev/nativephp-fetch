@@ -205,7 +205,7 @@ describe('Documentation', function () {
             '## Testing with fakes',
             '## Events reference',
             '## API reference',
-        );
+        )->not->toContain('Event::listen(FetchRequestCompleted::class');
     });
 });
 

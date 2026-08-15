@@ -453,18 +453,30 @@ public function completed(string $requestId, int $status, array $headers, string
 key is requested. Downloads retain their specialized completion event rather
 than pretending to be ordinary in-memory responses.
 
-When using Laravel's event dispatcher directly, construct the response from
-the event object:
+For a NativeComponent listener registered dynamically with `$this->on()`,
+construct the response from the event object:
 
 ```php
-use Illuminate\Support\Facades\Event;
 use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
 use Victorycodedev\NativephpFetch\FetchResponse;
 
-Event::listen(FetchRequestCompleted::class, function (FetchRequestCompleted $event) {
-    $response = FetchResponse::fromEvent($event);
-});
+public function mount(): void
+{
+    $this->on(
+        FetchRequestCompleted::class,
+        function (FetchRequestCompleted $event): void {
+            $response = FetchResponse::fromEvent($event);
+
+            // Update this NativeComponent's state from $response.
+        },
+    );
+}
 ```
+
+Native bridge events target the live NativeComponent. They are not
+automatically dispatched through Laravel's global `Event` facade. Prefer
+`#[On(...)]` for fixed listeners and `$this->on(...)` for listeners registered
+at runtime. Both are removed when the screen unmounts.
 
 ## Errors and terminal events
 
