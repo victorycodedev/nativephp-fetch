@@ -189,6 +189,24 @@ describe('Documentation', function () {
             '## Usage (JavaScript)',
         );
     });
+
+    it('documents installation uploads events testing and the public API', function () {
+        $readme = file_get_contents($this->pluginPath . '/README.md');
+
+        expect($readme)->toContain(
+            'https://nativephp.com/docs/mobile/4/plugins/using-plugins',
+            'php artisan native:plugin:list',
+            'php artisan native:run',
+            '## File uploads',
+            '### Upload one file',
+            '### Upload multiple files',
+            '## Upload events and progress',
+            'FetchUploadProgress::class',
+            '## Testing with fakes',
+            '## Events reference',
+            '## API reference',
+        );
+    });
 });
 
 describe('Composer Configuration', function () {
