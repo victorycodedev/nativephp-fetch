@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Documented tested Android and iOS compatibility with NativePHP Mobile 4.2.
+
 ## [1.0.0] - 2026-08-14
 
 ### Added

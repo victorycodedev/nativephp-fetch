@@ -543,7 +543,16 @@ stable across retry attempts.
 
 ## Platform, security, and compatibility
 
-- Requires NativePHP Mobile `^4.1`; supports iOS 18+ and Android API 29+.
+- Requires NativePHP Mobile `^4.1` (4.1 or a compatible later 4.x release);
+  supports iOS 18+ and Android API 29+.
+- Fetch 1.x has been tested with NativePHP Mobile 4.1 and 4.2 on Android and
+  iOS.
+
+| Fetch | NativePHP Mobile | Android | iOS |
+| --- | --- | --- | --- |
+| 1.x | 4.1 | ✅ | ✅ |
+| 1.x | 4.2 | ✅ | ✅ |
+
 - Android uses OkHttp 4.12.0 and requests only `android.permission.INTERNET`.
 - iOS uses Foundation `URLSession` with no external dependency or permission.
 - Fetch follows platform redirect handling. Validate untrusted URLs and avoid
