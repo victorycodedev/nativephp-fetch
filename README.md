@@ -1126,24 +1126,13 @@ high-level request API for normal application code.
 
 ## Development and support
 
-Install development dependencies with `composer install` and
-`npm ci --prefix resources/js`. The same checks enforced by CI can be run with:
+Run the test suite with:
 
 ```bash
-composer validate --strict
 composer test
-composer analyse
-composer format:check
-npm test --prefix resources/js
-npm run syntax --prefix resources/js
-npm run format:check --prefix resources/js
-git diff --check
 ```
 
-CI resolves both the lowest and latest dependency versions permitted by
-`composer.json`. Native changes must additionally be compiled in a generated
-NativePHP v4 app and exercised on simulators, emulators, and physical iOS and
-Android devices. Report issues through the
+Report issues through the
 [GitHub issue tracker](https://github.com/victorycodedev/nativephp-fetch/issues).
 
 ## License
