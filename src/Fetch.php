@@ -33,10 +33,12 @@ class Fetch
     {
         $this->requireFake()->assertSent($callback);
     }
+
     public function assertNotSent(?Closure $callback = null): void
     {
         $this->requireFake()->assertNotSent($callback);
     }
+
     public function assertSentCount(int $count): void
     {
         $this->requireFake()->assertSentCount($count);

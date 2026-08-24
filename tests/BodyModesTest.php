@@ -9,7 +9,7 @@ beforeEach(function () {
 });
 
 it('builds RFC1738 form bodies with special characters unicode and scalar values', function () {
-    (new PendingRequest())->asForm()->post('https://example.test', [
+    (new PendingRequest)->asForm()->post('https://example.test', [
         'name' => 'Victory Efe',
         'symbols' => 'a&b=c',
         'unicode' => 'Ẹ káàbọ̀',
@@ -28,22 +28,22 @@ it('builds RFC1738 form bodies with special characters unicode and scalar values
 });
 
 it('preserves an explicitly empty form body', function () {
-    (new PendingRequest())->asForm()->post('https://example.test');
+    (new PendingRequest)->asForm()->post('https://example.test');
     expect($GLOBALS['fetch_bridge_calls'][0]['payload']['body'])
         ->toBe(['type' => 'form', 'data' => '']);
 });
 
 it('builds raw text xml custom and empty bodies', function (string $body, string $contentType) {
-    (new PendingRequest())->withBody($body, $contentType)->post('https://example.test');
+    (new PendingRequest)->withBody($body, $contentType)->post('https://example.test');
     $payload = $GLOBALS['fetch_bridge_calls'][0]['payload'];
     expect($payload['headers']['Content-Type'])->toBe($contentType)
         ->and($payload['body'])->toBe(['type' => 'raw', 'data' => $body]);
 })->with([['hello', 'text/plain'], ['<user>Victory</user>', 'application/xml'], ['', 'application/graphql']]);
 
 it('rejects incompatible body modes before bridge execution', function () {
-    expect(fn() => (new PendingRequest())->attach('file', '/tmp/a')->asForm())->toThrow(FetchException::class)
-        ->and(fn() => (new PendingRequest())->withBody('raw')->attach('file', '/tmp/a'))->toThrow(FetchException::class)
-        ->and(fn() => (new PendingRequest())->withBody('raw')->post('https://example.test', ['extra' => true]))->toThrow(FetchException::class)
-        ->and(fn() => (new PendingRequest())->withBody('raw', ' '))->toThrow(FetchException::class);
+    expect(fn () => (new PendingRequest)->attach('file', '/tmp/a')->asForm())->toThrow(FetchException::class)
+        ->and(fn () => (new PendingRequest)->withBody('raw')->attach('file', '/tmp/a'))->toThrow(FetchException::class)
+        ->and(fn () => (new PendingRequest)->withBody('raw')->post('https://example.test', ['extra' => true]))->toThrow(FetchException::class)
+        ->and(fn () => (new PendingRequest)->withBody('raw', ' '))->toThrow(FetchException::class);
     expect($GLOBALS['fetch_bridge_calls'])->toBe([]);
 });

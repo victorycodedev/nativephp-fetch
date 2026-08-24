@@ -19,8 +19,8 @@ beforeEach(function () {
 });
 
 it('creates stable unique request ids before bridge execution', function () {
-    $first = new PendingRequest();
-    $second = new PendingRequest();
+    $first = new PendingRequest;
+    $second = new PendingRequest;
 
     expect($first->id())->toBeString()->not->toBeEmpty()
         ->and($second->id())->not->toBe($first->id())
@@ -28,7 +28,7 @@ it('creates stable unique request ids before bridge execution', function () {
 });
 
 it('forwards headers authentication accept json and timeout', function () {
-    $request = (new PendingRequest())
+    $request = (new PendingRequest)
         ->withHeaders(['X-Integer' => 42, 7 => true])
         ->withHeader('X-Custom', 'value')
         ->withToken('secret', 'Token')
@@ -54,7 +54,7 @@ it('forwards headers authentication accept json and timeout', function () {
 });
 
 it('forwards GET query and null body defaults', function () {
-    (new PendingRequest())->get(
+    (new PendingRequest)->get(
         'https://example.test/search',
         ['tag' => ['a', 'b'], 'page' => 2],
     );
@@ -67,8 +67,21 @@ it('forwards GET query and null body defaults', function () {
     ]);
 });
 
+it('replaces request headers case insensitively', function () {
+    (new PendingRequest)
+        ->withHeaders(['Accept' => 'text/plain', 'X-Test' => 'first'])
+        ->withHeader('accept', 'application/json')
+        ->withHeaders(['x-test' => 'second'])
+        ->get('https://example.test');
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['headers'])->toBe([
+        'accept' => 'application/json',
+        'x-test' => 'second',
+    ]);
+});
+
 it('uses null bodies for empty non-GET requests', function (string $method) {
-    (new PendingRequest())->{$method}('https://example.test');
+    (new PendingRequest)->{$method}('https://example.test');
 
     expect($GLOBALS['fetch_bridge_calls'][0]['payload']['body'])->toBeNull();
 })->with(['post', 'put', 'patch', 'delete']);
@@ -76,7 +89,7 @@ it('uses null bodies for empty non-GET requests', function (string $method) {
 it('normalizes multipart fields and preserves attachment metadata order', function () {
     $object = (object) ['nested' => 'value'];
 
-    (new PendingRequest())
+    (new PendingRequest)
         ->withHeader('content-TYPE', 'application/json')
         ->attach('photos[]', '/app/one.jpg', 'one.jpg', 'image/jpeg')
         ->attach('document', '/app/file.pdf')
@@ -121,19 +134,19 @@ it('validates timeout and attachments', function (
 ) {
     expect($action)->toThrow(FetchException::class, $message);
 })->with([
-    [fn() => (new PendingRequest())->timeout(0), 'at least 1 second'],
-    [fn() => (new PendingRequest())->attach(' ', '/app/a'), 'field name'],
-    [fn() => (new PendingRequest())->attach('file', ' '), 'path cannot be empty'],
-    [fn() => (new PendingRequest())->attach('file', '/'), 'determine an attachment filename'],
-    [fn() => (new PendingRequest())->attachMany(['bad']), 'must be an array'],
-    [fn() => (new PendingRequest())->attachMany([['path' => '/a']]), 'string name'],
-    [fn() => (new PendingRequest())->attachMany([['name' => 'a']]), 'string path'],
-    [fn() => (new PendingRequest())->attachMany([[
+    [fn () => (new PendingRequest)->timeout(0), 'at least 1 second'],
+    [fn () => (new PendingRequest)->attach(' ', '/app/a'), 'field name'],
+    [fn () => (new PendingRequest)->attach('file', ' '), 'path cannot be empty'],
+    [fn () => (new PendingRequest)->attach('file', '/'), 'determine an attachment filename'],
+    [fn () => (new PendingRequest)->attachMany(['bad']), 'must be an array'],
+    [fn () => (new PendingRequest)->attachMany([['path' => '/a']]), 'string name'],
+    [fn () => (new PendingRequest)->attachMany([['name' => 'a']]), 'string path'],
+    [fn () => (new PendingRequest)->attachMany([[
         'name' => 'a',
         'path' => '/a',
         'filename' => 1,
     ]]), 'filename'],
-    [fn() => (new PendingRequest())->attachMany([[
+    [fn () => (new PendingRequest)->attachMany([[
         'name' => 'a',
         'path' => '/a',
         'mimeType' => 1,
@@ -141,7 +154,7 @@ it('validates timeout and attachments', function (
 ]);
 
 it('rejects attachments on GET without invoking native code', function () {
-    expect(fn() => (new PendingRequest())
+    expect(fn () => (new PendingRequest)
         ->attach('file', '/app/file.txt')
         ->get('https://example.test'))
         ->toThrow(FetchException::class, 'cannot be sent with a GET');
@@ -155,7 +168,7 @@ it('handles native bridge rejection and error responses', function (
 ) {
     $GLOBALS['fetch_bridge_response'] = $response;
 
-    expect(fn() => (new PendingRequest())->post('https://example.test'))
+    expect(fn () => (new PendingRequest)->post('https://example.test'))
         ->toThrow(FetchException::class, $message);
 })->with([
     [['status' => 'error', 'message' => 'Native refused'], 'Native refused'],
@@ -168,16 +181,16 @@ it('handles download rejection and cancellation failures', function () {
         'message' => 'Destination rejected',
     ];
 
-    expect(fn() => (new PendingRequest())->download(
+    expect(fn () => (new PendingRequest)->download(
         'https://example.test/file',
         '/app/file',
     ))->toThrow(FetchException::class, 'Destination rejected');
 
     $GLOBALS['fetch_bridge_response'] = ['status' => 'error'];
-    expect((new PendingRequest())->cancel('request-id'))->toBeFalse();
+    expect((new PendingRequest)->cancel('request-id'))->toBeFalse();
 
     $GLOBALS['fetch_bridge_response'] = ['status' => 'success'];
-    expect((new PendingRequest())->cancel('request-id'))->toBeFalse();
+    expect((new PendingRequest)->cancel('request-id'))->toBeFalse();
 });
 
 it('exposes every request lifecycle event field', function () {
@@ -198,7 +211,7 @@ it('exposes every request lifecycle event field', function () {
 });
 
 it('exposes every direct manager entry point', function () {
-    $manager = new Fetch();
+    $manager = new Fetch;
 
     expect($manager->request())->toBeInstanceOf(PendingRequest::class)
         ->and($manager->withHeaders([]))->toBeInstanceOf(PendingRequest::class)

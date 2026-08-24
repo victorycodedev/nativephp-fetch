@@ -16,7 +16,7 @@ beforeEach(function () {
 });
 
 it('builds a complete fluent download bridge payload', function () {
-    $request = (new PendingRequest())
+    $request = (new PendingRequest)
         ->withToken('secret-token')
         ->withHeaders(['Accept' => 'application/pdf'])
         ->timeout(60);
@@ -50,7 +50,7 @@ it('builds a complete fluent download bridge payload', function () {
 });
 
 it('defaults download overwrite and query options', function () {
-    (new PendingRequest())->download(
+    (new PendingRequest)->download(
         'https://example.test/file.pdf',
         '/app/downloads/file.pdf',
     );
@@ -61,7 +61,7 @@ it('defaults download overwrite and query options', function () {
 });
 
 it('supports the direct manager download API', function () {
-    $requestId = (new FetchManager())->download(
+    $requestId = (new FetchManager)->download(
         'https://example.test/file.pdf',
         '/app/downloads/file.pdf',
     );
@@ -71,7 +71,7 @@ it('supports the direct manager download API', function () {
 });
 
 it('rejects an empty download destination before calling native code', function () {
-    expect(fn () => (new PendingRequest())->download(
+    expect(fn () => (new PendingRequest)->download(
         'https://example.test/file.pdf',
         '   ',
     ))->toThrow(FetchException::class, 'destination cannot be empty');
@@ -80,8 +80,8 @@ it('rejects an empty download destination before calling native code', function 
 });
 
 it('keeps cancellation bridge behavior backward compatible', function () {
-    $requestId = (new PendingRequest())->id();
-    $cancelled = (new FetchManager())->cancel($requestId);
+    $requestId = (new PendingRequest)->id();
+    $cancelled = (new FetchManager)->cancel($requestId);
 
     expect($cancelled)->toBeTrue()
         ->and($GLOBALS['fetch_bridge_calls'][0])->toBe([
@@ -94,7 +94,7 @@ it('keeps existing request methods on the start bridge', function (
     string $method,
     string $expectedMethod,
 ) {
-    $request = new PendingRequest();
+    $request = new PendingRequest;
 
     if ($method === 'get') {
         $request->get('https://example.test/resource', ['page' => 2]);
@@ -137,7 +137,7 @@ it('exposes typed download event data', function () {
 
 it('registers the download bridge and events in the manifest', function () {
     $manifest = json_decode(
-        file_get_contents(dirname(__DIR__) . '/nativephp.json'),
+        file_get_contents(dirname(__DIR__).'/nativephp.json'),
         true,
         flags: JSON_THROW_ON_ERROR,
     );

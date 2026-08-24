@@ -8,10 +8,14 @@ permissions:
   contents: read
 
 jobs:
-  tests:
-    name: PHP 8.4 / Node.js 22
+  php:
+    name: PHP 8.4 / ${{ matrix.dependencies }} dependencies
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        dependencies: [lowest, stable]
 
     steps:
       - name: Check out repository
@@ -27,26 +31,61 @@ jobs:
       - name: Validate Composer configuration
         run: composer validate --strict
 
-      - name: Install Composer dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Resolve Composer dependencies
+        run: composer update --prefer-${{ matrix.dependencies }} --prefer-dist --no-interaction --no-progress
 
       - name: Run PHP tests
         run: composer test
+
+      - name: Run static analysis
+        run: composer analyse
+
+      - name: Check PHP formatting
+        run: composer format:check
+
+      - name: Audit Composer dependencies
+        if: matrix.dependencies == 'stable'
+        run: composer audit --locked
+
+  javascript:
+    name: Node.js 22
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
-          package-manager-cache: false
+          cache: npm
+          cache-dependency-path: resources/js/package-lock.json
+
+      - name: Install JavaScript dependencies
+        run: npm ci --prefix resources/js
 
       - name: Run JavaScript tests
-        run: node --test resources/js/fetch.test.js
+        run: npm test --prefix resources/js
 
       - name: Check JavaScript syntax
-        run: |
-          for file in resources/js/*.js; do
-            node --check "$file"
-          done
+        run: npm run syntax --prefix resources/js
+
+      - name: Check JavaScript formatting
+        run: npm run format:check --prefix resources/js
+
+      - name: Audit JavaScript dependencies
+        run: npm audit --prefix resources/js --audit-level=high
+
+  repository:
+    name: Repository checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
 
       - name: Validate nativephp.json
         run: php -r 'json_decode(file_get_contents("nativephp.json"), true, 512, JSON_THROW_ON_ERROR);'

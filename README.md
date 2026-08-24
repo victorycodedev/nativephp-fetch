@@ -5,26 +5,38 @@ requests, uploads, and file downloads for NativePHP Mobile on iOS and Android.
 
 ## Contents
 
-- [Installation](#installation)
-- [How Fetch works](#how-fetch-works)
-- [Usage (PHP)](#usage-php)
-- [HTTP methods](#http-methods)
-- [Request configuration](#request-configuration)
-- [Request bodies](#request-bodies)
-- [File uploads](#file-uploads)
-- [Upload events and progress](#upload-events-and-progress)
-- [Responses](#responses)
-- [Errors and terminal events](#errors-and-terminal-events)
-- [Complete NativeComponent example](#complete-nativecomponent-example)
-- [Runtime scope](#runtime-scope-do-not-use-fetch-in-queued-jobs)
-- [Downloads](#downloads)
-- [Retries](#retry-policy)
-- [Cancellation](#cancellation)
-- [Usage (JavaScript)](#usage-javascript)
-- [Testing](#testing-with-fakes)
-- [Events reference](#events-reference)
-- [API reference](#api-reference)
-- [Compatibility and limitations](#platform-security-and-compatibility)
+- [Fetch for NativePHP Mobile](#fetch-for-nativephp-mobile)
+  - [Contents](#contents)
+  - [Requirements](#requirements)
+  - [Installation](#installation)
+  - [How Fetch works](#how-fetch-works)
+  - [Usage (PHP)](#usage-php)
+  - [HTTP methods](#http-methods)
+  - [Request configuration](#request-configuration)
+  - [Request bodies](#request-bodies)
+  - [File uploads](#file-uploads)
+    - [Upload one file](#upload-one-file)
+    - [Upload multiple files](#upload-multiple-files)
+  - [Upload events and progress](#upload-events-and-progress)
+  - [Responses](#responses)
+  - [Errors and terminal events](#errors-and-terminal-events)
+  - [Complete NativeComponent example](#complete-nativecomponent-example)
+  - [Runtime scope: do not use Fetch in queued jobs](#runtime-scope-do-not-use-fetch-in-queued-jobs)
+  - [Downloads](#downloads)
+    - [Download events](#download-events)
+    - [Download behavior and limitations](#download-behavior-and-limitations)
+  - [Retry policy](#retry-policy)
+  - [Cancellation](#cancellation)
+  - [Usage (JavaScript)](#usage-javascript)
+  - [Testing with fakes](#testing-with-fakes)
+  - [Events reference](#events-reference)
+  - [API reference](#api-reference)
+    - [Fetch facade and pending requests](#fetch-facade-and-pending-requests)
+    - [FetchResponse](#fetchresponse)
+    - [JavaScript exports](#javascript-exports)
+  - [Platform, security, and compatibility](#platform-security-and-compatibility)
+  - [Development and support](#development-and-support)
+  - [License](#license)
 
 ## Requirements
 
@@ -911,8 +923,9 @@ Download progress fields are `requestId`, `bytesReceived`, `bytesTotal`, and
 ## Testing with fakes
 
 The PHP fake never invokes `nativephp_call`, so it works in ordinary Pest or
-PHPUnit tests. It synchronously dispatches the same started/completed events
-through Laravel's event dispatcher when one is available.
+PHPUnit tests. It records native-shaped started/completed events for deterministic
+assertions; it does not route them through Laravel's event dispatcher because
+production NativePHP events are delivered through NativePHP's event bridge.
 
 ```php
 use Victorycodedev\NativephpFetch\FetchResponse;
@@ -1007,9 +1020,22 @@ names must match the event's public property names.
 100 for display. Download totals and progress are nullable because some servers
 do not send `Content-Length`.
 
-Timeouts emit failure code `timeout`; only explicit `cancel()` calls emit the
-cancelled event. A request ID is generated before bridge execution and remains
-stable across retry attempts.
+Transport failure codes are consistent across Android and iOS:
+
+| Code | Meaning |
+| --- | --- |
+| `timeout` | The native per-attempt timeout elapsed. |
+| `offline` | The device is not connected or has no route to the network. |
+| `dns_failure` | The host name could not be resolved. |
+| `connection_failed` | A connection to the host could not be established. |
+| `tls_failure` | TLS negotiation or certificate validation failed. |
+| `network_error` | Another native transport error occurred. |
+| `http_error` | A response status was treated as a failed download or exhausted retry. |
+| `write_failed` | A download could not be written or committed to its destination. |
+
+Only explicit `cancel()` calls emit the cancelled event; a timeout emits a
+failure event with code `timeout`. A request ID is generated before bridge
+execution and remains stable across retry attempts.
 
 ## API reference
 
@@ -1100,10 +1126,24 @@ high-level request API for normal application code.
 
 ## Development and support
 
-Run `composer validate --strict`, `composer dump-autoload -o`, `vendor/bin/pest`,
-and `node --test resources/js/fetch.test.js`. Native changes must additionally
-be compiled in a generated NativePHP v4 app and exercised on simulators,
-emulators, and physical iOS/Android devices. Report issues through the
+Install development dependencies with `composer install` and
+`npm ci --prefix resources/js`. The same checks enforced by CI can be run with:
+
+```bash
+composer validate --strict
+composer test
+composer analyse
+composer format:check
+npm test --prefix resources/js
+npm run syntax --prefix resources/js
+npm run format:check --prefix resources/js
+git diff --check
+```
+
+CI resolves both the lowest and latest dependency versions permitted by
+`composer.json`. Native changes must additionally be compiled in a generated
+NativePHP v4 app and exercised on simulators, emulators, and physical iOS and
+Android devices. Report issues through the
 [GitHub issue tracker](https://github.com/victorycodedev/nativephp-fetch/issues).
 
 ## License

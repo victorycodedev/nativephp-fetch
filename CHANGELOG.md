@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Documented tested Android and iOS compatibility with NativePHP Mobile 4.2.
+- Request headers now replace existing names case-insensitively in PHP and JavaScript.
+- Fetch fakes record native-shaped lifecycle events without routing them through Laravel's global event dispatcher.
+- Expanded Android and iOS transport, retry, terminal-state, and fake contract coverage.
+- Added PHP static analysis, PHP and JavaScript formatting checks, lowest/latest dependency CI lanes, dependency audits, package archive rules, and Dependabot configuration.
+
+### Fixed
+
+- Removed an unsafe Android retry-policy dereference without changing retry behavior.
+- Generated UUIDv7 request IDs through the plugin's declared Ramsey UUID dependency instead of relying on a newer Illuminate helper.
+- Declared the Illuminate Support versions compatible with NativePHP Mobile's Laravel 11+ requirement, preventing unsupported Illuminate 10 resolutions.
 
 ## [1.0.0] - 2026-08-14
 

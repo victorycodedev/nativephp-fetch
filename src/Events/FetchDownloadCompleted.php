@@ -10,7 +10,7 @@ class FetchDownloadCompleted
     use Dispatchable, SerializesModels;
 
     /**
-     * @param array<string, string|array<int, string>> $headers
+     * @param  array<string, string|array<int, string>>  $headers
      */
     public function __construct(
         public string $requestId,

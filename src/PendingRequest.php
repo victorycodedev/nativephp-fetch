@@ -2,8 +2,8 @@
 
 namespace Victorycodedev\NativephpFetch;
 
-use Illuminate\Support\Str;
 use JsonException;
+use Ramsey\Uuid\Uuid;
 use Victorycodedev\NativephpFetch\Exceptions\FetchException;
 use Victorycodedev\NativephpFetch\Testing\FakeFetch;
 
@@ -25,7 +25,7 @@ class PendingRequest
 
     public function __construct(protected ?FakeFetch $fake = null)
     {
-        $this->requestId = (string) Str::uuid7();
+        $this->requestId = Uuid::uuid7()->toString();
     }
 
     public function id(): string
@@ -36,7 +36,7 @@ class PendingRequest
     public function withHeaders(array $headers): static
     {
         foreach ($headers as $name => $value) {
-            $this->headers[(string) $name] = (string) $value;
+            $this->setHeader((string) $name, (string) $value);
         }
 
         return $this;
@@ -46,9 +46,20 @@ class PendingRequest
         string $name,
         string $value,
     ): static {
-        $this->headers[$name] = $value;
+        $this->setHeader($name, $value);
 
         return $this;
+    }
+
+    private function setHeader(string $name, string $value): void
+    {
+        foreach (array_keys($this->headers) as $existingName) {
+            if (strcasecmp((string) $existingName, $name) === 0) {
+                unset($this->headers[$existingName]);
+            }
+        }
+
+        $this->headers[$name] = $value;
     }
 
     public function withToken(
@@ -57,7 +68,7 @@ class PendingRequest
     ): static {
         return $this->withHeader(
             'Authorization',
-            trim($type) . ' ' . $token,
+            trim($type).' '.$token,
         );
     }
 
@@ -209,12 +220,7 @@ class PendingRequest
     }
 
     /**
-     * @param array<int, array{
-     *     name: string,
-     *     path: string,
-     *     filename?: string|null,
-     *     mimeType?: string|null
-     * }> $attachments
+     * @param  array<int, mixed>  $attachments
      */
     public function attachMany(array $attachments): static
     {
@@ -492,9 +498,10 @@ class PendingRequest
                     is_array($item), is_object($item) => json_encode($item, JSON_THROW_ON_ERROR),
                     default => (string) $item,
                 };
-                $pairs[] = urlencode((string) $name) . '=' . urlencode($normalized);
+                $pairs[] = urlencode((string) $name).'='.urlencode($normalized);
             }
         }
+
         return implode('&', $pairs);
     }
 

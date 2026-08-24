@@ -5,10 +5,9 @@
  *
  * Run with: ./vendor/bin/pest
  */
-
 beforeEach(function () {
     $this->pluginPath = dirname(__DIR__);
-    $this->manifestPath = $this->pluginPath . '/nativephp.json';
+    $this->manifestPath = $this->pluginPath.'/nativephp.json';
 });
 
 describe('Plugin Manifest', function () {
@@ -65,7 +64,7 @@ describe('Plugin Manifest', function () {
 
 describe('Native Code', function () {
     it('has Android Kotlin file', function () {
-        $kotlinFile = $this->pluginPath . '/resources/android/src/FetchFunctions.kt';
+        $kotlinFile = $this->pluginPath.'/resources/android/src/FetchFunctions.kt';
 
         expect(file_exists($kotlinFile))->toBeTrue();
 
@@ -76,7 +75,7 @@ describe('Native Code', function () {
     });
 
     it('has iOS Swift file', function () {
-        $swiftFile = $this->pluginPath . '/resources/ios/Sources/FetchFunctions.swift';
+        $swiftFile = $this->pluginPath.'/resources/ios/Sources/FetchFunctions.swift';
 
         expect(file_exists($swiftFile))->toBeTrue();
 
@@ -88,8 +87,8 @@ describe('Native Code', function () {
     it('has matching bridge function classes in native code', function () {
         $manifest = json_decode(file_get_contents($this->manifestPath), true);
 
-        $kotlinFile = $this->pluginPath . '/resources/android/src/FetchFunctions.kt';
-        $swiftFile = $this->pluginPath . '/resources/ios/Sources/FetchFunctions.swift';
+        $kotlinFile = $this->pluginPath.'/resources/android/src/FetchFunctions.kt';
+        $swiftFile = $this->pluginPath.'/resources/ios/Sources/FetchFunctions.swift';
 
         $kotlinContent = file_get_contents($kotlinFile);
         $swiftContent = file_get_contents($swiftFile);
@@ -115,7 +114,7 @@ describe('JavaScript Client', function () {
     it('exports every bridge function and public request method', function () {
         $content = '';
         foreach (new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($this->pluginPath . '/resources/js')
+            new RecursiveDirectoryIterator($this->pluginPath.'/resources/js')
         ) as $file) {
             if ($file->isFile() && $file->getExtension() === 'js') {
                 $content .= file_get_contents($file->getPathname());
@@ -140,7 +139,7 @@ describe('JavaScript Client', function () {
 
 describe('PHP Classes', function () {
     it('has service provider', function () {
-        $file = $this->pluginPath . '/src/FetchServiceProvider.php';
+        $file = $this->pluginPath.'/src/FetchServiceProvider.php';
         expect(file_exists($file))->toBeTrue();
 
         $content = file_get_contents($file);
@@ -149,7 +148,7 @@ describe('PHP Classes', function () {
     });
 
     it('has facade', function () {
-        $file = $this->pluginPath . '/src/Facades/Fetch.php';
+        $file = $this->pluginPath.'/src/Facades/Fetch.php';
         expect(file_exists($file))->toBeTrue();
 
         $content = file_get_contents($file);
@@ -158,7 +157,7 @@ describe('PHP Classes', function () {
     });
 
     it('has main implementation class', function () {
-        $file = $this->pluginPath . '/src/Fetch.php';
+        $file = $this->pluginPath.'/src/Fetch.php';
         expect(file_exists($file))->toBeTrue();
 
         $content = file_get_contents($file);
@@ -169,8 +168,8 @@ describe('PHP Classes', function () {
 
 describe('Documentation', function () {
     it('documents common methods NativeComponents and queued job limitations', function () {
-        $readme = file_get_contents($this->pluginPath . '/README.md');
-        $boost = file_get_contents($this->pluginPath . '/resources/boost/guidelines/core.blade.php');
+        $readme = file_get_contents($this->pluginPath.'/README.md');
+        $boost = file_get_contents($this->pluginPath.'/resources/boost/guidelines/core.blade.php');
 
         foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'NativeComponent', 'queued jobs', 'Laravel\'s normal HTTP client'] as $term) {
             expect($readme)->toContain($term);
@@ -181,7 +180,7 @@ describe('Documentation', function () {
     });
 
     it('uses the NativePHP marketplace required README headings', function () {
-        $readme = file_get_contents($this->pluginPath . '/README.md');
+        $readme = file_get_contents($this->pluginPath.'/README.md');
 
         expect($readme)->toContain(
             '## Installation',
@@ -191,7 +190,7 @@ describe('Documentation', function () {
     });
 
     it('documents installation uploads events testing and the public API', function () {
-        $readme = file_get_contents($this->pluginPath . '/README.md');
+        $readme = file_get_contents($this->pluginPath.'/README.md');
 
         expect($readme)->toContain(
             'https://nativephp.com/docs/mobile/4/plugins/using-plugins',
@@ -211,7 +210,7 @@ describe('Documentation', function () {
 
 describe('Composer Configuration', function () {
     it('has valid composer.json', function () {
-        $composerPath = $this->pluginPath . '/composer.json';
+        $composerPath = $this->pluginPath.'/composer.json';
         expect(file_exists($composerPath))->toBeTrue();
 
         $content = file_get_contents($composerPath);
@@ -242,12 +241,12 @@ describe('Lifecycle Hooks', function () {
 
         expect($manifest['hooks']['copy_assets'] ?? null)->not->toBeNull();
 
-        $commandFile = $this->pluginPath . '/src/Commands/CopyAssetsCommand.php';
+        $commandFile = $this->pluginPath.'/src/Commands/CopyAssetsCommand.php';
         expect(file_exists($commandFile))->toBeTrue();
     });
 
     it('copy_assets command extends NativePluginHookCommand', function () {
-        $commandFile = $this->pluginPath . '/src/Commands/CopyAssetsCommand.php';
+        $commandFile = $this->pluginPath.'/src/Commands/CopyAssetsCommand.php';
         $content = file_get_contents($commandFile);
 
         expect($content)->toContain('extends NativePluginHookCommand');
@@ -258,14 +257,14 @@ describe('Lifecycle Hooks', function () {
         $manifest = json_decode(file_get_contents($this->manifestPath), true);
         $expectedSignature = $manifest['hooks']['copy_assets'];
 
-        $commandFile = $this->pluginPath . '/src/Commands/CopyAssetsCommand.php';
+        $commandFile = $this->pluginPath.'/src/Commands/CopyAssetsCommand.php';
         $content = file_get_contents($commandFile);
 
-        expect($content)->toContain('$signature = \'' . $expectedSignature . '\'');
+        expect($content)->toContain('$signature = \''.$expectedSignature.'\'');
     });
 
     it('copy_assets command has platform-specific methods', function () {
-        $commandFile = $this->pluginPath . '/src/Commands/CopyAssetsCommand.php';
+        $commandFile = $this->pluginPath.'/src/Commands/CopyAssetsCommand.php';
         $content = file_get_contents($commandFile);
 
         // Should check for platform

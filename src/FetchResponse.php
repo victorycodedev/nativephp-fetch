@@ -43,14 +43,17 @@ final readonly class FetchResponse
     {
         return $this->requestId;
     }
+
     public function status(): int
     {
         return $this->status;
     }
+
     public function body(): string
     {
         return $this->body;
     }
+
     public function headers(): array
     {
         return $this->headers;
@@ -59,8 +62,11 @@ final readonly class FetchResponse
     public function header(string $name, mixed $default = null): mixed
     {
         foreach ($this->headers as $header => $value) {
-            if (strcasecmp((string) $header, $name) === 0) return $value;
+            if (strcasecmp((string) $header, $name) === 0) {
+                return $value;
+            }
         }
+
         return $default;
     }
 
@@ -72,7 +78,10 @@ final readonly class FetchResponse
             return $default;
         }
 
-        if ($key === null) return $decoded;
+        if ($key === null) {
+            return $decoded;
+        }
+
         return is_array($decoded) ? Arr::get($decoded, $key, $default) : $default;
     }
 
@@ -80,22 +89,27 @@ final readonly class FetchResponse
     {
         return $this->status === 200;
     }
+
     public function successful(): bool
     {
         return $this->status >= 200 && $this->status < 300;
     }
+
     public function redirect(): bool
     {
         return $this->status >= 300 && $this->status < 400;
     }
+
     public function failed(): bool
     {
         return $this->status >= 400;
     }
+
     public function clientError(): bool
     {
         return $this->status >= 400 && $this->status < 500;
     }
+
     public function serverError(): bool
     {
         return $this->status >= 500 && $this->status < 600;

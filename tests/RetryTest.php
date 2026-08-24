@@ -14,7 +14,7 @@ beforeEach(function () {
 });
 
 it('uses documented retry defaults', function () {
-    (new PendingRequest())->retry()->get('https://example.test');
+    (new PendingRequest)->retry()->get('https://example.test');
 
     expect($GLOBALS['fetch_bridge_calls'][0]['payload']['retry'])->toBe([
         'times' => 3,
@@ -34,12 +34,12 @@ it('forwards custom retry policy to requests uploads and downloads', function ()
         'statuses' => [409, 425],
     ];
 
-    (new PendingRequest())->retry(4, 250, 1.5, 5000, [409, 425])
+    (new PendingRequest)->retry(4, 250, 1.5, 5000, [409, 425])
         ->post('https://example.test', ['value' => 1]);
-    (new PendingRequest())->retry(4, 250, 1.5, 5000, [409, 425])
+    (new PendingRequest)->retry(4, 250, 1.5, 5000, [409, 425])
         ->attach('file', '/app/file.txt')
         ->post('https://example.test/upload');
-    $download = (new PendingRequest())->retry(4, 250, 1.5, 5000, [409, 425]);
+    $download = (new PendingRequest)->retry(4, 250, 1.5, 5000, [409, 425]);
     $id = $download->id();
     expect($download->download('https://example.test/file', '/app/file'))->toBe($id);
 
@@ -49,8 +49,8 @@ it('forwards custom retry policy to requests uploads and downloads', function ()
 });
 
 it('keeps retry strictly opt in and isolated per request', function () {
-    (new Fetch())->retry(2)->get('https://example.test/retry');
-    (new Fetch())->get('https://example.test/once');
+    (new Fetch)->retry(2)->get('https://example.test/retry');
+    (new Fetch)->get('https://example.test/once');
 
     expect($GLOBALS['fetch_bridge_calls'][0]['payload']['retry']['times'])->toBe(2)
         ->and($GLOBALS['fetch_bridge_calls'][1]['payload']['retry'])->toBeNull();
@@ -60,7 +60,7 @@ it('validates retry configuration', function (
     array $arguments,
     string $message,
 ) {
-    expect(fn () => (new PendingRequest())->retry(...$arguments))
+    expect(fn () => (new PendingRequest)->retry(...$arguments))
         ->toThrow(FetchException::class, $message);
 })->with([
     [[-1], 'times'],
@@ -90,11 +90,11 @@ it('exposes the retry event shape', function () {
 
 it('registers the retry event and facade API', function () {
     $manifest = json_decode(
-        file_get_contents(dirname(__DIR__) . '/nativephp.json'),
+        file_get_contents(dirname(__DIR__).'/nativephp.json'),
         true,
         flags: JSON_THROW_ON_ERROR,
     );
-    $facade = file_get_contents(dirname(__DIR__) . '/src/Facades/Fetch.php');
+    $facade = file_get_contents(dirname(__DIR__).'/src/Facades/Fetch.php');
 
     expect($manifest['events'])->toContain(FetchRequestRetrying::class)
         ->and($facade)->toContain('@method static PendingRequest retry(');
