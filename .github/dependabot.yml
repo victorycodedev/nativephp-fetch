@@ -16,8 +16,15 @@ updates:
       javascript-development-dependencies:
         dependency-type: development
 
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: weekly
+    groups:
+      documentation-dependencies:
+        dependency-type: development
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-

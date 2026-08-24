@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fetch fakes record native-shaped lifecycle events without routing them through Laravel's global event dispatcher.
 - Expanded Android and iOS transport, retry, terminal-state, and fake contract coverage.
 - Added PHP static analysis, PHP and JavaScript formatting checks, lowest/latest dependency CI lanes, dependency audits, package archive rules, and Dependabot configuration.
+- Moved detailed usage documentation into a searchable GitHub Pages site and reduced the README to a concise package overview.
 
 ### Fixed
 

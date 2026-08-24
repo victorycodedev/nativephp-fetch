@@ -169,13 +169,16 @@ describe('PHP Classes', function () {
 describe('Documentation', function () {
     it('documents common methods NativeComponents and queued job limitations', function () {
         $readme = file_get_contents($this->pluginPath.'/README.md');
+        $docs = collect(glob($this->pluginPath.'/docs/*.md'))
+            ->map(fn (string $path) => file_get_contents($path))
+            ->implode("\n");
         $boost = file_get_contents($this->pluginPath.'/resources/boost/guidelines/core.blade.php');
 
         foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'NativeComponent', 'queued jobs', 'Laravel\'s normal HTTP client'] as $term) {
-            expect($readme)->toContain($term);
+            expect($readme.$docs)->toContain($term);
         }
 
-        expect($readme)->toContain('<native:button', '#[On(FetchRequestCompleted::class)]')
+        expect($docs)->toContain('<native:button', '#[On(FetchRequestCompleted::class)]')
             ->and($boost)->toContain('Never use it', 'queued jobs', 'Laravel\'s `Http` facade');
     });
 
@@ -191,19 +194,22 @@ describe('Documentation', function () {
 
     it('documents installation uploads events testing and the public API', function () {
         $readme = file_get_contents($this->pluginPath.'/README.md');
+        $docs = collect(glob($this->pluginPath.'/docs/*.md'))
+            ->map(fn (string $path) => file_get_contents($path))
+            ->implode("\n");
 
-        expect($readme)->toContain(
+        expect($readme.$docs)->toContain(
             'https://nativephp.com/docs/mobile/4/plugins/using-plugins',
             'php artisan native:plugin:list',
             'php artisan native:run',
-            '## File uploads',
-            '### Upload one file',
-            '### Upload multiple files',
-            '## Upload events and progress',
+            '# File uploads',
+            '## Upload one file',
+            '## Upload multiple files',
+            '## Upload progress',
             'FetchUploadProgress::class',
-            '## Testing with fakes',
-            '## Events reference',
-            '## API reference',
+            '# Testing',
+            '## Event reference',
+            '# API reference',
         )->not->toContain('Event::listen(FetchRequestCompleted::class');
     });
 });
