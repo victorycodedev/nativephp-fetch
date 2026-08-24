@@ -5,6 +5,9 @@ hero:
   name: NativePHP Fetch
   text: Native networking for NativePHP Mobile
   tagline: Truly asynchronous HTTP requests, uploads, downloads, progress, retries, and cancellation on Android and iOS.
+  image:
+    src: /icon.png
+    alt: NativePHP Fetch logo
   actions:
     - theme: brand
       text: Get started
