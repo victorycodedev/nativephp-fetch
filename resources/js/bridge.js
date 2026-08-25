@@ -1,17 +1,23 @@
 const baseUrl = "/_native/api/call";
 
 function csrfToken() {
-  return globalThis.document?.querySelector('meta[name="csrf-token"]')?.content || "";
+  return (
+    globalThis.document?.querySelector('meta[name="csrf-token"]')?.content || ""
+  );
 }
 
 export async function bridgeCall(method, params = {}) {
   const response = await globalThis.fetch(baseUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-CSRF-TOKEN": csrfToken() },
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-TOKEN": csrfToken(),
+    },
     body: JSON.stringify({ method, params }),
   });
 
-  if (!response.ok) throw new Error(`Native bridge returned HTTP ${response.status}`);
+  if (!response.ok)
+    throw new Error(`Native bridge returned HTTP ${response.status}`);
 
   const result = await response.json();
   if (result.status === "error") {
@@ -31,7 +37,8 @@ export async function bridgeCall(method, params = {}) {
 }
 
 export const start = (parameters = {}) => bridgeCall("Fetch.Start", parameters);
-export const downloadNative = (parameters = {}) => bridgeCall("Fetch.Download", parameters);
+export const downloadNative = (parameters = {}) =>
+  bridgeCall("Fetch.Download", parameters);
 export async function cancel(id) {
   const response = await bridgeCall("Fetch.Cancel", { request_id: id });
   return Boolean(response?.cancelled);

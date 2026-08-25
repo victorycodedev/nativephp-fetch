@@ -11,7 +11,7 @@ use Native\Mobile\Plugins\Commands\NativePluginHookCommand;
  * Use it to copy ML models, binary files, or other assets that need
  * to be in specific locations in the native project.
  *
- * @see \Native\Mobile\Plugins\Commands\NativePluginHookCommand
+ * @see NativePluginHookCommand
  */
 class CopyAssetsCommand extends NativePluginHookCommand
 {

@@ -18,12 +18,18 @@ export class PendingRequest {
   }
   withHeaders(headers) {
     for (const [name, value] of Object.entries(headers))
-      this.headers[String(name)] = String(value);
+      this.setHeader(String(name), String(value));
     return this;
   }
   withHeader(name, value) {
-    this.headers[String(name)] = String(value);
+    this.setHeader(String(name), String(value));
     return this;
+  }
+  setHeader(name, value) {
+    for (const existingName of Object.keys(this.headers))
+      if (existingName.toLowerCase() === name.toLowerCase())
+        delete this.headers[existingName];
+    this.headers[name] = value;
   }
   withToken(token, type = "Bearer") {
     return this.withHeader("Authorization", `${String(type).trim()} ${token}`);

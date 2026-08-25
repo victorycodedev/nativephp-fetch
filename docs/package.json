@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:dev": "node scripts/sync-assets.mjs && vitepress dev",
+    "docs:build": "node scripts/sync-assets.mjs && vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "2.0.0-alpha.11"
+  }
+}

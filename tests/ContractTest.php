@@ -43,7 +43,7 @@ it('keeps the manager and pending request public APIs synchronized', function ()
 
 it('documents every manager API on the facade', function () {
     $facade = file_get_contents(
-        dirname(__DIR__) . '/src/Facades/Fetch.php'
+        dirname(__DIR__).'/src/Facades/Fetch.php'
     );
 
     foreach ([
@@ -72,7 +72,7 @@ it('documents every manager API on the facade', function () {
 it('keeps manifest events synchronized with PHP and native implementations', function () {
     $root = dirname(__DIR__);
     $manifest = json_decode(
-        file_get_contents($root . '/nativephp.json'),
+        file_get_contents($root.'/nativephp.json'),
         true,
         flags: JSON_THROW_ON_ERROR,
     );
@@ -83,15 +83,16 @@ it('keeps manifest events synchronized with PHP and native implementations', fun
                 $contents .= file_get_contents($file->getPathname());
             }
         }
+
         return $contents;
     };
-    $android = $nativeSources($root . '/resources/android/src', 'kt');
-    $ios = $nativeSources($root . '/resources/ios/Sources', 'swift');
+    $android = $nativeSources($root.'/resources/android/src', 'kt');
+    $ios = $nativeSources($root.'/resources/ios/Sources', 'swift');
 
     foreach ($manifest['events'] as $event) {
         $class = class_basename($event);
 
-        expect(file_exists($root . "/src/Events/{$class}.php"))->toBeTrue()
+        expect(file_exists($root."/src/Events/{$class}.php"))->toBeTrue()
             ->and($android)->toContain(str_replace('\\', '\\\\', $event))
             ->and($ios)->toContain(str_replace('\\', '\\\\', $event));
     }
@@ -100,7 +101,7 @@ it('keeps manifest events synchronized with PHP and native implementations', fun
 it('keeps every manifest bridge registered in native code and JavaScript', function () {
     $root = dirname(__DIR__);
     $manifest = json_decode(
-        file_get_contents($root . '/nativephp.json'),
+        file_get_contents($root.'/nativephp.json'),
         true,
         flags: JSON_THROW_ON_ERROR,
     );
@@ -111,11 +112,12 @@ it('keeps every manifest bridge registered in native code and JavaScript', funct
                 $contents .= file_get_contents($file->getPathname());
             }
         }
+
         return $contents;
     };
-    $android = $sources($root . '/resources/android/src', 'kt');
-    $ios = $sources($root . '/resources/ios/Sources', 'swift');
-    $javascript = $sources($root . '/resources/js', 'js');
+    $android = $sources($root.'/resources/android/src', 'kt');
+    $ios = $sources($root.'/resources/ios/Sources', 'swift');
+    $javascript = $sources($root.'/resources/js', 'js');
 
     foreach ($manifest['bridge_functions'] as $bridge) {
         $androidClass = class_basename(str_replace('.', '\\', $bridge['android']));
@@ -129,7 +131,7 @@ it('keeps every manifest bridge registered in native code and JavaScript', funct
 
 it('distinguishes Android call timeouts from explicit cancellation', function () {
     $android = file_get_contents(
-        dirname(__DIR__) . '/resources/android/src/FetchFunctions.kt'
+        dirname(__DIR__).'/resources/android/src/FetchFunctions.kt'
     );
 
     expect($android)
@@ -145,4 +147,47 @@ it('implements explicit form and raw modes on both native platforms', function (
     $ios = file_get_contents($root.'/resources/ios/Sources/FetchFunctions.swift');
     expect($android)->toContain('"form" ->', '"raw" ->', 'application/x-www-form-urlencoded')
         ->and($ios)->toContain('case "form":', 'case "raw":', 'application/x-www-form-urlencoded');
+});
+
+it('keeps native transport error codes and retry policy aligned', function () {
+    $root = dirname(__DIR__);
+    $android = file_get_contents($root.'/resources/android/src/FetchFunctions.kt');
+    $ios = file_get_contents($root.'/resources/ios/Sources/FetchFunctions.swift');
+    $codes = [
+        'timeout',
+        'offline',
+        'dns_failure',
+        'connection_failed',
+        'tls_failure',
+        'network_error',
+    ];
+    $retryable = array_diff($codes, ['tls_failure']);
+
+    foreach ($codes as $code) {
+        expect($android)->toContain('"'.$code.'"')
+            ->and($ios)->toContain('"'.$code.'"');
+    }
+
+    foreach ($retryable as $code) {
+        expect(substr($android, strpos($android, 'private fun isRetryableNetwork'), 400))
+            ->toContain('"'.$code.'"')
+            ->and(substr($ios, strpos($ios, 'private func isRetryableNetwork'), 400))
+            ->toContain('"'.$code.'"');
+    }
+});
+
+it('guards terminal request transitions on both native platforms', function () {
+    $root = dirname(__DIR__);
+    $android = file_get_contents($root.'/resources/android/src/FetchFunctions.kt');
+    $ios = file_get_contents($root.'/resources/ios/Sources/FetchFunctions.swift');
+
+    expect($android)
+        ->toContain('ConcurrentHashMap<String, Call>()')
+        ->toContain('synchronized(operation)')
+        ->toContain('if (operation.terminal || operation.cancelled) false')
+        ->toContain('operation.terminal = true')
+        ->and($ios)
+        ->toContain('private let lock = NSLock()')
+        ->toContain('guard !state.terminal, !state.cancelled else')
+        ->toContain('state.terminal = true');
 });

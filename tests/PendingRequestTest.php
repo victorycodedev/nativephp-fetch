@@ -4,7 +4,7 @@ use Victorycodedev\NativephpFetch\Exceptions\FetchException;
 use Victorycodedev\NativephpFetch\PendingRequest;
 
 it('attaches multiple files', function () {
-    $request = (new PendingRequest())->attachMany([
+    $request = (new PendingRequest)->attachMany([
         [
             'name' => 'photos[]',
             'path' => '/tmp/one.jpg',
@@ -48,9 +48,9 @@ it('attaches multiple files', function () {
 });
 
 it('rejects an invalid attachment before adding any files', function () {
-    $request = new PendingRequest();
+    $request = new PendingRequest;
 
-    expect(fn() => $request->attachMany([
+    expect(fn () => $request->attachMany([
         [
             'name' => 'photos[]',
             'path' => '/tmp/one.jpg',

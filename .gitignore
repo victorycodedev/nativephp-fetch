@@ -1,5 +1,11 @@
 /vendor/
 /node_modules/
+/resources/js/node_modules/
+/docs/node_modules/
+/docs/.vitepress/dist/
+/docs/public/icon.png
+/docs/.vitepress/cache/
+/.phpstan.cache/
 /.phpunit.cache/
 .DS_Store
 *.log

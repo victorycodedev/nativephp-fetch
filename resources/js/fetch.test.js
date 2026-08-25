@@ -179,6 +179,18 @@ test("normalizes multipart fields and removes caller content type", async () => 
   });
 });
 
+test("replaces request headers case insensitively", async () => {
+  await Fetch.withHeaders({ Accept: "text/plain", "X-Test": "first" })
+    .withHeader("accept", "application/json")
+    .withHeaders({ "x-test": "second" })
+    .get("https://example.test");
+
+  assert.deepEqual(calls[0].params.headers, {
+    accept: "application/json",
+    "x-test": "second",
+  });
+});
+
 test("uses null bodies for empty requests and forwards GET query", async () => {
   await Fetch.get("https://example.test", { page: 2 });
   await Fetch.post("https://example.test");

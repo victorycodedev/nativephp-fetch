@@ -1,10 +1,13 @@
 <?php
 
-if (! trait_exists(Illuminate\Foundation\Events\Dispatchable::class)) {
+use Illuminate\Foundation\Events\Dispatchable;
+use Illuminate\Queue\SerializesModels;
+
+if (! trait_exists(Dispatchable::class)) {
     eval('namespace Illuminate\\Foundation\\Events; trait Dispatchable {}');
 }
 
-if (! trait_exists(Illuminate\Queue\SerializesModels::class)) {
+if (! trait_exists(SerializesModels::class)) {
     eval('namespace Illuminate\\Queue; trait SerializesModels {}');
 }
 

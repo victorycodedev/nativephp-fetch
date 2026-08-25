@@ -616,22 +616,23 @@ private object FetchClient {
         status: Int? = null,
         retryAfter: String? = null,
     ): Boolean {
-        val delay = synchronized(state) {
+        val (delay, maxAttempts) = synchronized(state) {
+            val policy = state.policy ?: return false
             if (state.cancelled || state.terminal ||
-                state.policy == null || state.attempt >= state.policy.maxAttempts
+                state.attempt >= policy.maxAttempts
             ) return false
 
             state.partial.delete()
-            val value = retryDelay(state.policy, state.attempt, retryAfter)
+            val value = retryDelay(policy, state.attempt, retryAfter)
             state.attempt++
-            value
+            value to policy.maxAttempts
         }
 
         emitRetrying(
             activity,
             state.requestId,
             state.attempt,
-            state.policy!!.maxAttempts,
+            maxAttempts,
             delay,
             reason,
             status,

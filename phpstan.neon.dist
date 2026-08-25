@@ -1,0 +1,11 @@
+parameters:
+    level: 5
+    paths:
+        - src/Exceptions
+        - src/Facades
+        - src/Fetch.php
+        - src/FetchResponse.php
+        - src/FetchServiceProvider.php
+        - src/PendingRequest.php
+        - src/Testing
+    tmpDir: .phpstan.cache

@@ -1,0 +1,11 @@
+/.github/** export-ignore
+/.gitignore export-ignore
+/.gitattributes export-ignore
+/phpunit.xml export-ignore
+/phpstan.neon.dist export-ignore
+/pint.json export-ignore
+/tests/** export-ignore
+/docs/** export-ignore
+/resources/js/*.test.js export-ignore
+/resources/js/node_modules export-ignore
+/resources/js/package-lock.json export-ignore

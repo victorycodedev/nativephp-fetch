@@ -24,6 +24,7 @@
     ],
     "require": {
         "php": "^8.4",
+        "illuminate/support": "^11.0 || ^12.0 || ^13.0",
         "nativephp/mobile": "^4.1",
         "ramsey/uuid": "^4.7"
     },
@@ -43,9 +44,14 @@
         }
     },
     "require-dev": {
-        "pestphp/pest": "^4.0"
+        "laravel/pint": "^1.30",
+        "pestphp/pest": "^4.0",
+        "phpstan/phpstan": "^2.2"
     },
     "scripts": {
+        "analyse": "phpstan analyse --no-progress --debug",
+        "format": "pint",
+        "format:check": "pint --test",
         "test": "pest"
     },
     "config": {
