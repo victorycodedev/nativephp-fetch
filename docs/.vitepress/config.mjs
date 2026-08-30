@@ -21,7 +21,7 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/" },
           { text: "Installation", link: "/getting-started" },
-          { text: "Requests and bodies", link: "/requests" },
+          { text: "Making requests", link: "/requests" },
         ],
       },
       {
@@ -29,9 +29,9 @@ export default defineConfig({
         items: [
           { text: "Uploads", link: "/uploads" },
           { text: "Downloads", link: "/downloads" },
-          { text: "Events and responses", link: "/events" },
           { text: "NativeComponent example", link: "/native-component" },
           { text: "Retries and cancellation", link: "/retries-cancellation" },
+          { text: "Events and responses", link: "/events" },
         ],
       },
       {

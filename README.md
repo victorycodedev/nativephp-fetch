@@ -1,7 +1,13 @@
 # Fetch for NativePHP Mobile
 
-Fetch is a free community plugin providing truly asynchronous native HTTP
-requests, uploads, and file downloads for NativePHP Mobile on Android and iOS.
+Fetch is a free community networking plugin for NativePHP Mobile. It provides
+an expressive, fluent API for truly asynchronous HTTP requests on Android and
+iOS, backed by OkHttp and URLSession.
+
+Requests return a stable ID immediately, while responses, failures, retries,
+cancellation, and transfer progress are delivered through NativePHP events.
+Fetch is intended for native application interactions; queued jobs should use
+Laravel's HTTP client instead.
 
 ## Features
 
@@ -11,90 +17,47 @@ requests, uploads, and file downloads for NativePHP Mobile on Android and iOS.
 - Upload and download progress events
 - Streaming file downloads
 - Opt-in retries with exponential backoff
-- Timeouts and cancellation
+- Per-attempt timeouts and explicit cancellation
 - Fluent PHP and official JavaScript clients
 - Request fakes for Pest and PHPUnit tests
 
-## Requirements
+## Compatibility
 
-- PHP 8.4+
-- NativePHP Mobile 4.1 or a compatible later 4.x release
-- Android API 29+ or iOS 18+
-
-Fetch 1.x has been tested with NativePHP Mobile 4.1 and 4.2 on Android and iOS.
-
-## Installation
-
-```bash
-composer require victorycodedev/nativephp-fetch
-php artisan native:plugin:register victorycodedev/nativephp-fetch
-```
-
-See NativePHP's official [Using Plugins guide](https://nativephp.com/docs/mobile/4/plugins/using-plugins)
-if you need more information about registering and rebuilding plugins.
-
-## Usage (PHP)
-
-```php
-use Native\Mobile\Attributes\On;
-use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
-use Victorycodedev\NativephpFetch\Facades\Fetch;
-
-$request = Fetch::acceptJson()->timeout(30);
-$this->requestId = $request->id();
-$request->get('https://api.example.com/users');
-
-#[On(FetchRequestCompleted::class)]
-public function completed(
-    string $requestId,
-    int $status,
-    array $headers,
-    string $body,
-): void {
-    if ($requestId !== $this->requestId) {
-        return;
-    }
-
-    // Handle the response.
-}
-```
-
-Fetch returns a stable request ID immediately. Progress and results arrive
-later through NativePHP events.
-
-## Usage (JavaScript)
-
-```javascript
-import Fetch from './vendor/victorycodedev/nativephp-fetch/resources/js/fetch.js';
-
-const requestId = await Fetch.withToken(token)
-  .acceptJson()
-  .post(url, { name: 'Victory' });
-```
-
-The JavaScript promise resolves when native code accepts the request. The HTTP
-result is delivered through a NativePHP event.
+Fetch 1.x supports PHP 8.4+, NativePHP Mobile `^4.1`, Android API 29+, and
+iOS 18+. The NativePHP constraint includes all compatible 4.x releases and
+excludes future major versions.
 
 ## Documentation
 
 Read the complete documentation at
 [victorycodedev.github.io/nativephp-fetch](https://victorycodedev.github.io/nativephp-fetch/).
 
-The documentation covers requests, bodies, uploads, downloads, events,
-responses, retries, cancellation, JavaScript usage, testing, compatibility, and
-the complete API reference.
+## Installation
 
-## Testing
+See the [installation guide](https://victorycodedev.github.io/nativephp-fetch/getting-started).
 
-```bash
-composer test
-```
+## Usage (PHP)
+
+See [making requests with PHP](https://victorycodedev.github.io/nativephp-fetch/requests)
+and the [NativeComponent example](https://victorycodedev.github.io/nativephp-fetch/native-component).
+
+## Usage (JavaScript)
+
+See the [JavaScript client guide](https://victorycodedev.github.io/nativephp-fetch/javascript).
+
+## Feature guides
+
+- [Uploads](https://victorycodedev.github.io/nativephp-fetch/uploads)
+- [Downloads](https://victorycodedev.github.io/nativephp-fetch/downloads)
+- [Events and responses](https://victorycodedev.github.io/nativephp-fetch/events)
+- [Retries and cancellation](https://victorycodedev.github.io/nativephp-fetch/retries-cancellation)
+- [API reference](https://victorycodedev.github.io/nativephp-fetch/api-reference)
 
 ## Support
 
-Report bugs and request help through the
+Report bugs or request help through the
 [GitHub issue tracker](https://github.com/victorycodedev/nativephp-fetch/issues).
 
 ## License
 
-MIT
+NativePHP Fetch is open-source software released under the MIT License.

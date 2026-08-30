@@ -1,6 +1,123 @@
-# Requests and bodies
+# Making requests
 
-Every request method starts asynchronously and returns its stable request ID.
+To make requests, use the `get`, `post`, `put`, `patch`, and `delete` methods
+provided by the `Fetch` facade. Each method starts a native asynchronous request
+and returns its stable request ID immediately. The response is delivered later
+through a NativePHP event.
+
+## Complete login action
+
+Start the request from a NativeComponent action, store its ID, and listen for
+each possible terminal event. Checking the ID prevents another request's event
+from changing this component.
+
+```php
+use Native\Mobile\Attributes\On;
+use Native\Mobile\Edge\NativeComponent;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCancelled;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
+use Victorycodedev\NativephpFetch\Events\FetchRequestFailed;
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+use Victorycodedev\NativephpFetch\FetchResponse;
+
+class LoginScreen extends NativeComponent
+{
+    public string $email = '';
+    public string $password = '';
+    public bool $loading = false;
+    public ?string $requestId = null;
+    public ?string $error = null;
+
+    public function login(): void
+    {
+        $this->loading = true;
+        $this->error = null;
+
+        $request = Fetch::acceptJson()->timeout(30);
+
+        $this->requestId = $request->id();
+        $request->post('https://api.example.com/login', [
+            'email' => $this->email,
+            'password' => $this->password,
+        ]);
+    }
+
+    public function cancelLogin(): void
+    {
+        if ($this->requestId !== null) {
+            Fetch::cancel($this->requestId);
+        }
+    }
+
+    #[On(FetchRequestCompleted::class)]
+    public function completed(
+        string $requestId,
+        int $status,
+        array $headers,
+        string $body,
+    ): void {
+        if ($requestId !== $this->requestId) {
+            return;
+        }
+
+        $this->loading = false;
+        $response = FetchResponse::from($requestId, $status, $headers, $body);
+
+        if ($response->successful()) {
+            $token = $response->json('token');
+
+            // Store the token and continue into the application.
+            return;
+        }
+
+        $this->error = $response->json('message', 'Login failed.');
+    }
+
+    #[On(FetchRequestFailed::class)]
+    public function failed(
+        string $requestId,
+        string $message,
+        ?string $code = null,
+    ): void {
+        if ($requestId !== $this->requestId) {
+            return;
+        }
+
+        $this->loading = false;
+        $this->error = $code === 'timeout'
+            ? 'The login request timed out.'
+            : $message;
+    }
+
+    #[On(FetchRequestCancelled::class)]
+    public function cancelled(string $requestId): void
+    {
+        if ($requestId !== $this->requestId) {
+            return;
+        }
+
+        $this->loading = false;
+        $this->error = 'Login cancelled.';
+    }
+}
+```
+
+## GET requests
+
+The `get` method accepts the URL followed by an optional array of query
+parameters:
+
+```php
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+$requestId = Fetch::acceptJson()->get(
+    'https://api.example.com/users',
+    ['page' => 2],
+);
+```
+
+The request starts immediately without blocking the component. Listen for its
+events and compare their request ID with `$requestId` before handling them.
 
 ## HTTP methods
 

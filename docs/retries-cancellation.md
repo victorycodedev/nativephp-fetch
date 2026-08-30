@@ -30,6 +30,37 @@ codes `timeout`, `offline`, `dns_failure`, `connection_failed`, and
 The same request ID is retained across attempts. `FetchRequestRetrying`
 announces the next attempt and scheduled delay.
 
+## Retry event
+
+Listen for `FetchRequestRetrying` to show the current attempt or scheduled
+delay in your interface:
+
+```php
+use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchRequestRetrying;
+
+#[On(FetchRequestRetrying::class)]
+public function retrying(
+    string $requestId,
+    int $attempt,
+    int $maxAttempts,
+    int $delayMs,
+    string $reason,
+    ?int $status = null,
+): void {
+    if ($requestId !== $this->requestId) {
+        return;
+    }
+
+    $delay = $delayMs / 1000;
+    $this->status = "Retrying attempt {$attempt} of {$maxAttempts} in {$delay} seconds";
+}
+```
+
+`attempt` is the upcoming attempt number and `maxAttempts` includes the first
+attempt. `status` contains the retryable HTTP status when one caused the retry;
+otherwise it is `null` and `reason` describes the transport failure.
+
 Be careful when retrying POST, PATCH, and other non-idempotent requests because
 the server may repeat side effects. Use server-supported idempotency keys when
 appropriate.
@@ -42,3 +73,24 @@ Fetch::cancel($requestId);
 
 Cancellation works for requests, uploads, downloads, active attempts, and
 pending retry delays. It emits `FetchRequestCancelled`; a timeout never does.
+
+## Cancellation event
+
+```php
+use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCancelled;
+
+#[On(FetchRequestCancelled::class)]
+public function cancelled(string $requestId): void
+{
+    if ($requestId !== $this->requestId) {
+        return;
+    }
+
+    $this->loading = false;
+    $this->status = 'Request cancelled.';
+}
+```
+
+Only an explicit call to `Fetch::cancel()` emits this event. A timeout or other
+transport problem emits `FetchRequestFailed` instead.

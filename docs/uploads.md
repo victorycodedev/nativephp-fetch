@@ -58,7 +58,9 @@ Progress represents the complete multipart request, not an individual file:
 
 ```php
 use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchRequestCompleted;
 use Victorycodedev\NativephpFetch\Events\FetchUploadProgress;
+use Victorycodedev\NativephpFetch\FetchResponse;
 
 #[On(FetchUploadProgress::class)]
 public function uploadProgress(
@@ -73,7 +75,33 @@ public function uploadProgress(
 
     $this->percentage = (int) round($progress * 100);
 }
+
+#[On(FetchRequestCompleted::class)]
+public function uploadCompleted(
+    string $requestId,
+    int $status,
+    array $headers,
+    string $body,
+): void {
+    if ($requestId !== $this->requestId) {
+        return;
+    }
+
+    $response = FetchResponse::from($requestId, $status, $headers, $body);
+
+    if ($response->successful()) {
+        $this->percentage = 100;
+
+        // The upload completed and the server response is available here.
+        return;
+    }
+
+    $this->error = $response->json('message', 'Upload failed.');
+}
 ```
 
 `progress` ranges from `0.0` to `1.0`. Upload retries reopen their file-backed
-bodies and progress restarts from zero for each attempt.
+bodies and progress restarts from zero for each attempt. Uploads finish through
+`FetchRequestCompleted`, just like other HTTP requests; there is no separate
+upload-completed event. Inspect the response status to determine whether the
+server accepted the upload.

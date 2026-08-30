@@ -46,5 +46,28 @@ response length.
 `bytesReceived`. Fetch commits the partial file to the final destination only
 after a successful download.
 
+```php
+use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchDownloadCompleted;
+
+#[On(FetchDownloadCompleted::class)]
+public function downloadCompleted(
+    string $requestId,
+    int $status,
+    array $headers,
+    string $path,
+    int $bytesReceived,
+): void {
+    if ($requestId !== $this->requestId) {
+        return;
+    }
+
+    $this->percentage = 100;
+    $this->downloadedFile = $path;
+
+    // The completed file is now available at $path.
+}
+```
+
 Cancelled and failed downloads remove Fetch-owned partial files. Retries begin
 again at byte zero; resumable Range downloads are not supported.

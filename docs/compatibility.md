@@ -2,10 +2,14 @@
 
 | Fetch | NativePHP Mobile | Android | iOS |
 | --- | --- | --- | --- |
-| 1.x | 4.1 | ✅ | ✅ |
-| 1.x | 4.2 | ✅ | ✅ |
+| 1.x | `^4.1` (all compatible 4.x releases) | ✅ | ✅ |
 
-- Requires NativePHP Mobile `^4.1`, PHP 8.4+, Android API 29+, and iOS 18+.
+Fetch 1.x requires NativePHP Mobile `^4.1`. This Composer constraint supports
+NativePHP Mobile 4.1 and compatible later 4.x releases while excluding 5.0 and
+other future major versions. New NativePHP Mobile 4.x releases are checked on
+Android and iOS as part of ongoing plugin maintenance.
+
+- Requires PHP 8.4+, Android API 29+, and iOS 18+.
 - Android uses OkHttp 4.12.0 and requests `android.permission.INTERNET`.
 - iOS uses Foundation `URLSession` with no external networking dependency.
 - Authorization values, request bodies, and file contents are not logged.
