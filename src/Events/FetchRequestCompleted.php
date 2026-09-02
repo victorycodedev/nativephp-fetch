@@ -4,8 +4,9 @@ namespace Victorycodedev\NativephpFetch\Events;
 
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Native\Mobile\Events\Concerns\BroadcastsGlobally;
 
-class FetchRequestCompleted
+class FetchRequestCompleted implements BroadcastsGlobally
 {
     use Dispatchable, SerializesModels;
 

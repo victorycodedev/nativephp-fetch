@@ -81,3 +81,13 @@ configured pending request so request state is not shared.
 The module exports `Fetch`, `PendingRequest`, and named helpers for every
 configuration and request method. Low-level `bridgeCall`, `start`, and
 `downloadNative` exports are available for advanced integrations.
+
+## Application-wide events
+
+`FetchRequestStarted`, `FetchRequestCompleted`, and `FetchRequestFailed` can be
+consumed either by a NativeComponent using `#[On]` or application-wide using
+Laravel's `Event::listen()`. Their constructors and payloads are identical in
+both cases.
+
+The remaining progress, retry, cancellation, and download-completed events are
+component-only.

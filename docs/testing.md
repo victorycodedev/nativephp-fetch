@@ -39,7 +39,8 @@ Fetch::fake([
 
 The fake records events for deterministic assertions through
 `Fetch::fakeInstance()->events()`. It does not dispatch through Laravel's global
-event dispatcher because production events use NativePHP's event bridge.
+event dispatcher because production global dispatch occurs when an event
+arrives through NativePHP's event bridge.
 
 Run the package test suite with:
 

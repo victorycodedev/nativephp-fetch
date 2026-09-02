@@ -71,3 +71,7 @@ public function downloadCompleted(
 
 Cancelled and failed downloads remove Fetch-owned partial files. Retries begin
 again at byte zero; resumable Range downloads are not supported.
+
+Downloads dispatch the globally observable `FetchRequestStarted` event after
+native preparation succeeds. Download failures use the globally observable
+`FetchRequestFailed` event. `FetchDownloadCompleted` remains component-only.
