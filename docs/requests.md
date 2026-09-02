@@ -133,6 +133,61 @@ Fetch::acceptJson()->delete($url);
 
 List query values become repeated query keys.
 
+## Base URLs
+
+Use `baseUrl` to keep a shared API origin or path prefix out of each request:
+
+```php
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+Fetch::baseUrl('https://api.example.com/v1')
+    ->acceptJson()
+    ->get('/users', ['page' => 2]);
+```
+
+Fetch joins the base URL and relative request path with exactly one slash. An
+absolute request URL overrides the configured base URL:
+
+```php
+Fetch::baseUrl('https://api.example.com')
+    ->get('https://status.example.com/health');
+```
+
+`baseUrl` belongs to that pending request only. Query parameters remain
+separate from the resolved URL and retain the same native encoding behavior as
+requests without a base URL.
+
+## Macros
+
+Macros let an application define reusable request presets. Register them once,
+typically in an application service provider's `boot` method:
+
+```php
+use Victorycodedev\NativephpFetch\Fetch;
+
+Fetch::macro('api', function () {
+    return $this->baseUrl(config('services.api.url'))
+        ->acceptJson()
+        ->withToken(config('services.api.token'))
+        ->timeout(15);
+});
+```
+
+Call the macro through the facade wherever a request is needed:
+
+```php
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+Fetch::api()->get('/users');
+Fetch::api()->post('/users', ['name' => 'Victory']);
+```
+
+Macros are registered on the shared Fetch manager, but each macro above calls
+`baseUrl` on the manager and therefore creates a fresh `PendingRequest`. This
+keeps request IDs and fluent configuration isolated. Macro registrations are
+static for the lifetime of the PHP process; tests that register temporary
+macros may call `Fetch::flushMacros()` during cleanup.
+
 ## Headers and authentication
 
 ```php

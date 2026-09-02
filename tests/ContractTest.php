@@ -6,6 +6,7 @@ use Victorycodedev\NativephpFetch\PendingRequest;
 it('keeps the manager and pending request public APIs synchronized', function () {
     $expected = [
         'request',
+        'baseUrl',
         'withHeaders',
         'withHeader',
         'withToken',
@@ -48,6 +49,7 @@ it('documents every manager API on the facade', function () {
 
     foreach ([
         'request',
+        'baseUrl',
         'withHeaders',
         'withHeader',
         'withToken',

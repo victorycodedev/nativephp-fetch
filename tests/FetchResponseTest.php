@@ -17,6 +17,35 @@ it('classifies HTTP response statuses', function (int $status, array $expected) 
     [503, [false, false, false, true, false, true]],
 ]);
 
+it('matches exact HTTP response status helpers', function (string $method, int $status) {
+    $matching = FetchResponse::from('id', $status);
+    $neighbor = FetchResponse::from('id', $status + 1);
+
+    expect($matching->statusIs($status))->toBeTrue()
+        ->and($matching->statusIs($status + 1))->toBeFalse()
+        ->and($matching->{$method}())->toBeTrue()
+        ->and($neighbor->{$method}())->toBeFalse();
+})->with([
+    ['created', 201],
+    ['accepted', 202],
+    ['noContent', 204],
+    ['movedPermanently', 301],
+    ['found', 302],
+    ['badRequest', 400],
+    ['unauthorized', 401],
+    ['paymentRequired', 402],
+    ['forbidden', 403],
+    ['notFound', 404],
+    ['methodNotAllowed', 405],
+    ['requestTimeout', 408],
+    ['conflict', 409],
+    ['gone', 410],
+    ['unprocessableEntity', 422],
+    ['tooManyRequests', 429],
+    ['internalServerError', 500],
+    ['serviceUnavailable', 503],
+]);
+
 it('provides body headers and case insensitive lookup', function () {
     $response = FetchResponse::from('request-id', 200, ['content-TYPE' => 'application/json', 'X-Many' => ['a', 'b']], '{"data":{"user":{"name":"Victory"}}}');
     expect($response->requestId())->toBe('request-id')

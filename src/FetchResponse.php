@@ -87,7 +87,102 @@ final readonly class FetchResponse
 
     public function ok(): bool
     {
-        return $this->status === 200;
+        return $this->statusIs(200);
+    }
+
+    public function statusIs(int $status): bool
+    {
+        return $this->status === $status;
+    }
+
+    public function created(): bool
+    {
+        return $this->statusIs(201);
+    }
+
+    public function accepted(): bool
+    {
+        return $this->statusIs(202);
+    }
+
+    public function noContent(): bool
+    {
+        return $this->statusIs(204);
+    }
+
+    public function movedPermanently(): bool
+    {
+        return $this->statusIs(301);
+    }
+
+    public function found(): bool
+    {
+        return $this->statusIs(302);
+    }
+
+    public function badRequest(): bool
+    {
+        return $this->statusIs(400);
+    }
+
+    public function unauthorized(): bool
+    {
+        return $this->statusIs(401);
+    }
+
+    public function paymentRequired(): bool
+    {
+        return $this->statusIs(402);
+    }
+
+    public function forbidden(): bool
+    {
+        return $this->statusIs(403);
+    }
+
+    public function notFound(): bool
+    {
+        return $this->statusIs(404);
+    }
+
+    public function methodNotAllowed(): bool
+    {
+        return $this->statusIs(405);
+    }
+
+    public function requestTimeout(): bool
+    {
+        return $this->statusIs(408);
+    }
+
+    public function conflict(): bool
+    {
+        return $this->statusIs(409);
+    }
+
+    public function gone(): bool
+    {
+        return $this->statusIs(410);
+    }
+
+    public function unprocessableEntity(): bool
+    {
+        return $this->statusIs(422);
+    }
+
+    public function tooManyRequests(): bool
+    {
+        return $this->statusIs(429);
+    }
+
+    public function internalServerError(): bool
+    {
+        return $this->statusIs(500);
+    }
+
+    public function serviceUnavailable(): bool
+    {
+        return $this->statusIs(503);
     }
 
     public function successful(): bool

@@ -18,6 +18,7 @@ Laravel's HTTP client instead.
 - Streaming file downloads
 - Opt-in retries with exponential backoff
 - Per-attempt timeouts and explicit cancellation
+- Request-local base URLs and reusable application macros
 - Fluent PHP and official JavaScript clients
 - Request fakes for Pest and PHPUnit tests
 
