@@ -60,6 +60,33 @@ it('defaults download overwrite and query options', function () {
         ->and($GLOBALS['fetch_bridge_calls'][0]['payload']['timeout'])->toBe(30);
 });
 
+it('resolves relative download URLs against a request base URL', function () {
+    (new PendingRequest)
+        ->baseUrl('https://cdn.example.com/v1/')
+        ->download(
+            '/files/report.pdf?download=1',
+            '/app/downloads/report.pdf',
+            query: ['version' => 2],
+        );
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['url'])
+        ->toBe('https://cdn.example.com/v1/files/report.pdf?download=1')
+        ->and($GLOBALS['fetch_bridge_calls'][0]['payload']['query'])
+        ->toBe(['version' => 2]);
+});
+
+it('leaves absolute download URLs unchanged when a base URL is configured', function () {
+    (new PendingRequest)
+        ->baseUrl('https://cdn.example.com')
+        ->download(
+            'https://other.example.com/report.pdf',
+            '/app/downloads/report.pdf',
+        );
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['url'])
+        ->toBe('https://other.example.com/report.pdf');
+});
+
 it('supports the direct manager download API', function () {
     $requestId = (new FetchManager)->download(
         'https://example.test/file.pdf',

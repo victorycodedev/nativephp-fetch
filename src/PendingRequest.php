@@ -15,6 +15,8 @@ class PendingRequest
 
     protected array $attachments = [];
 
+    protected ?string $baseUrl = null;
+
     protected int $timeout = 30;
 
     protected string $bodyMode = 'json';
@@ -31,6 +33,17 @@ class PendingRequest
     public function id(): string
     {
         return $this->requestId;
+    }
+
+    public function baseUrl(string $url): static
+    {
+        if (trim($url) === '') {
+            throw new FetchException('Fetch base URL cannot be empty.');
+        }
+
+        $this->baseUrl = rtrim($url, '/');
+
+        return $this;
     }
 
     public function withHeaders(array $headers): static
@@ -354,7 +367,7 @@ class PendingRequest
             'Fetch.Download',
             [
                 'request_id' => $requestId,
-                'url' => $url,
+                'url' => $this->resolveUrl($url),
                 'destination' => $destination,
                 'headers' => $this->headers,
                 'query' => $query,
@@ -407,7 +420,7 @@ class PendingRequest
         $payload = [
             'request_id' => $requestId,
             'method' => strtoupper($method),
-            'url' => $url,
+            'url' => $this->resolveUrl($url),
             'headers' => $this->headers,
             'query' => $query,
             'timeout' => $this->timeout,
@@ -478,6 +491,19 @@ class PendingRequest
             'type' => 'json',
             'data' => $data,
         ];
+    }
+
+    protected function resolveUrl(string $url): string
+    {
+        if ($this->baseUrl === null || preg_match('/^[a-z][a-z0-9+.-]*:\/\//i', $url) === 1) {
+            return $url;
+        }
+
+        if ($url === '') {
+            return $this->baseUrl;
+        }
+
+        return $this->baseUrl.'/'.ltrim($url, '/');
     }
 
     protected function assertNoAttachments(string $mode): void

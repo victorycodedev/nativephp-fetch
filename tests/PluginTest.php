@@ -210,7 +210,8 @@ describe('Documentation', function () {
             '# Testing',
             '## Event reference',
             '# API reference',
-        )->not->toContain('Event::listen(FetchRequestCompleted::class');
+            'Event::listen(FetchRequestCompleted::class',
+        );
     });
 });
 

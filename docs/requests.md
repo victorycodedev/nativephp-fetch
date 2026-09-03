@@ -33,13 +33,12 @@ class LoginScreen extends NativeComponent
         $this->loading = true;
         $this->error = null;
 
-        $request = Fetch::acceptJson()->timeout(30);
-
-        $this->requestId = $request->id();
-        $request->post('https://api.example.com/login', [
-            'email' => $this->email,
-            'password' => $this->password,
-        ]);
+        $this->requestId = Fetch::acceptJson()
+            ->timeout(30)
+            ->post('https://api.example.com/login', [
+                'email' => $this->email,
+                'password' => $this->password,
+            ]);
     }
 
     public function cancelLogin(): void
@@ -65,7 +64,6 @@ class LoginScreen extends NativeComponent
 
         if ($response->successful()) {
             $token = $response->json('token');
-
             // Store the token and continue into the application.
             return;
         }
@@ -132,6 +130,71 @@ Fetch::acceptJson()->delete($url);
 ```
 
 List query values become repeated query keys.
+
+## Base URLs
+
+Use `baseUrl` to keep a shared API origin or path prefix out of each request:
+
+```php
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+Fetch::baseUrl('https://api.example.com/v1')
+    ->acceptJson()
+    ->get('/users', ['page' => 2]);
+```
+
+Fetch joins the base URL and relative request path with exactly one slash. An
+absolute request URL overrides the configured base URL:
+
+```php
+Fetch::baseUrl('https://api.example.com')
+    ->get('https://status.example.com/health');
+```
+
+`baseUrl` belongs to that pending request only. Query parameters remain
+separate from the resolved URL and retain the same native encoding behavior as
+requests without a base URL.
+
+## Macros
+
+Macros let an application define reusable request presets. Register them once
+in your `AppServiceProvider`'s `boot` method:
+
+```php
+<?php
+
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        Fetch::macro('api', function () {
+            return $this->baseUrl(config('services.api.url'))
+                ->acceptJson()
+                ->withToken(config('services.api.token'))
+                ->timeout(15);
+        });
+    }
+}
+```
+
+Call the macro through the facade wherever a request is needed:
+
+```php
+use Victorycodedev\NativephpFetch\Facades\Fetch;
+
+Fetch::api()->get('/users');
+Fetch::api()->post('/users', ['name' => 'Victory']);
+```
+Macro closures are bound to the Fetch manager, so methods such as `baseUrl()`,
+`withToken()`, and `acceptJson()` create and configure a fresh `PendingRequest`
+for each call. This keeps request IDs and fluent configuration isolated. Macro
+registrations are static for the lifetime of the PHP process; tests that
+register temporary macros may call `Fetch::flushMacros()` during cleanup.
 
 ## Headers and authentication
 

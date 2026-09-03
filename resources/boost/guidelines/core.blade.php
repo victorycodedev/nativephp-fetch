@@ -6,8 +6,8 @@ streaming downloads for NativePHP Mobile.
 ### Requests
 
 Public fluent methods are `request`, `withHeaders`, `withHeader`, `withToken`,
-`acceptJson`, `asJson`, `asForm`, `withBody`, `timeout`, `retry`, `attach`, and
-`attachMany`. Terminal methods are `get`, `post`, `put`, `patch`, `delete`,
+`baseUrl`, `acceptJson`, `asJson`, `asForm`, `withBody`, `timeout`, `retry`,
+`attach`, and `attachMany`. Terminal methods are `get`, `post`, `put`, `patch`, `delete`,
 `download`, and `cancel`; they return a stable request ID (except `cancel`,
 which returns a boolean), never a synchronous HTTP response.
 
@@ -36,10 +36,21 @@ Common calls:
         Fetch::acceptJson()->asJson()->patch("{$url}/{$id}", ['active' => true]);
         Fetch::acceptJson()->delete("{$url}/{$id}");
         Fetch::withHeaders(['X-App' => 'mobile'])
-            ->withToken($token)
-            ->get($url);
+        ->withToken($token)
+        ->get($url);
     </code-snippet>
 @endverbatim
+
+Use `Fetch::baseUrl('https://api.example.com/v1')->get('/users')` to resolve a
+relative request or download URL. An absolute terminal URL overrides the base.
+The query array remains separate in the native bridge payload and native code
+appends it after any query already present in the resolved URL.
+
+The Fetch manager uses Laravel Macroable. Register reusable request presets
+with `Victorycodedev\NativephpFetch\Fetch::macro()` in an application service
+provider, and have each macro call a fluent manager method such as `baseUrl()`
+so it returns a fresh PendingRequest. Macros persist for the PHP process;
+temporary test macros should be cleaned up with `Fetch::flushMacros()`.
 
 In a NativeComponent, create the pending request, assign `$request->id()` to
 component state, then call the terminal method. Listen with `#[On(...)]`,
@@ -56,7 +67,11 @@ Form/raw bodies cannot be combined with attachments or GET.
 Construct `FetchResponse::from($requestId, $status, $headers, $body)` inside a
 `FetchRequestCompleted` listener. Helpers include `status`, `body`, `headers`,
 case-insensitive `header`, `json` with dot notation, `ok`, `successful`,
-`redirect`, `failed`, `clientError`, and `serverError`. Invalid JSON returns
+`redirect`, `failed`, `clientError`, `serverError`, `statusIs`, `created`,
+`accepted`, `noContent`, `movedPermanently`, `found`, `badRequest`,
+`unauthorized`, `paymentRequired`, `forbidden`, `notFound`, `methodNotAllowed`,
+`requestTimeout`, `conflict`, `gone`, `unprocessableEntity`, `tooManyRequests`,
+`internalServerError`, and `serviceUnavailable`. Invalid JSON returns
 the caller's default rather than throwing.
 
 ### Downloads

@@ -3,10 +3,13 @@
 namespace Victorycodedev\NativephpFetch;
 
 use Closure;
+use Illuminate\Support\Traits\Macroable;
 use Victorycodedev\NativephpFetch\Testing\FakeFetch;
 
 class Fetch
 {
+    use Macroable;
+
     protected ?FakeFetch $fake = null;
 
     public function fake(array $responses = []): FakeFetch
@@ -52,6 +55,11 @@ class Fetch
     public function withHeaders(array $headers): PendingRequest
     {
         return $this->request()->withHeaders($headers);
+    }
+
+    public function baseUrl(string $url): PendingRequest
+    {
+        return $this->request()->baseUrl($url);
     }
 
     public function withHeader(string $name, string $value): PendingRequest

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added reusable Fetch manager macros through Laravel's `Macroable` trait.
+- Added request-local `baseUrl()` support for relative request and download URLs.
+- Added `FetchResponse::statusIs()` and named helpers for common HTTP statuses.
+- Added application-wide Laravel listeners for the existing request started, completed, and failed events.
+
 ### Changed
 
 - Documented tested Android and iOS compatibility with NativePHP Mobile 4.2.

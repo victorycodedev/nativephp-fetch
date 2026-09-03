@@ -67,6 +67,71 @@ it('forwards GET query and null body defaults', function () {
     ]);
 });
 
+it('resolves request local base URLs without changing query payloads', function (
+    string $baseUrl,
+    string $url,
+    string $expected,
+) {
+    (new PendingRequest)
+        ->baseUrl($baseUrl)
+        ->get($url, [
+            'page' => 2,
+            'active' => true,
+            'tags' => ['php', 'mobile'],
+            'empty' => null,
+        ]);
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['url'])->toBe($expected)
+        ->and($GLOBALS['fetch_bridge_calls'][0]['payload']['query'])->toBe([
+            'page' => 2,
+            'active' => true,
+            'tags' => ['php', 'mobile'],
+            'empty' => null,
+        ]);
+})->with([
+    ['https://api.example.com', '/users', 'https://api.example.com/users'],
+    ['https://api.example.com/', '/users', 'https://api.example.com/users'],
+    ['https://api.example.com', 'users', 'https://api.example.com/users'],
+    ['https://api.example.com/v1', '/users', 'https://api.example.com/v1/users'],
+    ['https://api.example.com', '/users?sort=name', 'https://api.example.com/users?sort=name'],
+]);
+
+it('leaves absolute URLs unchanged when a base URL is configured', function () {
+    (new PendingRequest)
+        ->baseUrl('https://api.example.com/v1')
+        ->get('https://other.example.com/users?sort=name', ['page' => 2]);
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['url'])
+        ->toBe('https://other.example.com/users?sort=name')
+        ->and($GLOBALS['fetch_bridge_calls'][0]['payload']['query'])
+        ->toBe(['page' => 2]);
+});
+
+it('preserves existing URLs and query encoding inputs without a base URL', function () {
+    (new PendingRequest)->get('https://example.test/users?sort=name', [
+        'search' => 'first & last',
+        'tags' => ['a/b', 'c d'],
+        'enabled' => false,
+        'empty' => null,
+    ]);
+
+    expect($GLOBALS['fetch_bridge_calls'][0]['payload']['url'])
+        ->toBe('https://example.test/users?sort=name')
+        ->and($GLOBALS['fetch_bridge_calls'][0]['payload']['query'])->toBe([
+            'search' => 'first & last',
+            'tags' => ['a/b', 'c d'],
+            'enabled' => false,
+            'empty' => null,
+        ]);
+});
+
+it('rejects an empty base URL before bridge execution', function () {
+    expect(fn () => (new PendingRequest)->baseUrl('  '))
+        ->toThrow(FetchException::class, 'base URL cannot be empty');
+
+    expect($GLOBALS['fetch_bridge_calls'])->toBe([]);
+});
+
 it('replaces request headers case insensitively', function () {
     (new PendingRequest)
         ->withHeaders(['Accept' => 'text/plain', 'X-Test' => 'first'])
@@ -214,6 +279,7 @@ it('exposes every direct manager entry point', function () {
     $manager = new Fetch;
 
     expect($manager->request())->toBeInstanceOf(PendingRequest::class)
+        ->and($manager->baseUrl('https://example.test'))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->withHeaders([]))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->withHeader('X', 'Y'))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->withToken('token'))->toBeInstanceOf(PendingRequest::class)
