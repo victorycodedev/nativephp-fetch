@@ -64,7 +64,6 @@ class LoginScreen extends NativeComponent
 
         if ($response->successful()) {
             $token = $response->json('token');
-
             // Store the token and continue into the application.
             return;
         }
