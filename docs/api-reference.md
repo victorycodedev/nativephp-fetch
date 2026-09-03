@@ -18,7 +18,7 @@ pending request mutate and return that same request.
 | `asForm()` | Select RFC 1738 form body mode. |
 | `withBody(body, contentType = 'text/plain')` | Select a raw string body. |
 | `timeout(seconds)` | Set the per-attempt native timeout. |
-| `retry(...)` | Enable and configure native retries. |
+| `retry(times = 3, delay = 500, multiplier = 2.0, maxDelay = 30000, statuses = [])` | Enable and configure native retries. `delay` and `maxDelay` are in milliseconds. |
 | `attach(...)` | Append one multipart file. |
 | `attachMany(attachments)` | Validate and append multiple files. |
 | `get(url, query = [])` | Start a GET request. |
@@ -44,6 +44,7 @@ configured pending request so request state is not shared.
 | `from(requestId, status, headers = [], body = '')` | Build from event arguments. |
 | `fromEvent(event)` | Build from `FetchRequestCompleted`. |
 | `make(status = 200, body = '', headers = [])` | Build a response for tests. |
+| `withRequestId(requestId)` | Return a copy with a new request ID. |
 | `requestId()` | Return the associated request ID. |
 | `status()` | Return the HTTP status. |
 | `headers()` | Return every response header. |
@@ -79,8 +80,7 @@ configured pending request so request state is not shared.
 ## JavaScript exports
 
 The module exports `Fetch`, `PendingRequest`, and named helpers for every
-configuration and request method. Low-level `bridgeCall`, `start`, and
-`downloadNative` exports are available for advanced integrations.
+configuration and request method.
 
 ## Application-wide events
 

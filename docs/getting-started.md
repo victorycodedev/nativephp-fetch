@@ -38,13 +38,23 @@ for or return the HTTP response.
 ```php
 use Victorycodedev\NativephpFetch\Facades\Fetch;
 
-$request = Fetch::acceptJson()->timeout(30);
-$requestId = $request->id();
-$returnedId = $request->get('https://api.example.com/users');
+$requestId = Fetch::acceptJson()
+    ->timeout(30)
+    ->get('https://api.example.com/users');
 ```
 
-`$requestId` and `$returnedId` are the same. Store the ID before starting work
-so even a very fast event can be correlated with the correct request.
+The returned value is the request ID. If you need the ID before the network
+work is accepted, read it from the pending request first:
+
+```php
+$request = Fetch::acceptJson()->timeout(30);
+$requestId = $request->id();
+$request->get('https://api.example.com/users');
+```
+
+Both `$requestId` and the value returned by `get()` are identical. Store the ID
+before starting work so even a very fast event can be correlated with the
+correct request.
 
 ## Runtime scope
 

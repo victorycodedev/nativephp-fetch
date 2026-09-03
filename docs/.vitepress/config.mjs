@@ -39,6 +39,7 @@ export default defineConfig({
         items: [
           { text: "JavaScript", link: "/javascript" },
           { text: "Testing", link: "/testing" },
+          { text: "Validation and errors", link: "/errors" },
           { text: "API reference", link: "/api-reference" },
           { text: "Compatibility", link: "/compatibility" },
         ],

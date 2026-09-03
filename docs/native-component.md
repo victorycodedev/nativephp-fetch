@@ -23,12 +23,10 @@ class TasksScreen extends NativeComponent
         $this->loading = true;
         $this->error = null;
 
-        $request = Fetch::withToken(config('services.api.token'))
+        $this->requestId = Fetch::withToken(config('services.api.token'))
             ->acceptJson()
-            ->timeout(15);
-
-        $this->requestId = $request->id();
-        $request->get('https://api.example.com/tasks', ['limit' => 20]);
+            ->timeout(15)
+            ->get('https://api.example.com/tasks', ['limit' => 20]);
     }
 
     public function cancelRequest(): void
