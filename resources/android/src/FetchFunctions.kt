@@ -168,7 +168,13 @@ private object FetchClient {
             url = request.url.toString(),
         )
 
-        val operation = RetryOperation(requestId, retryPolicy, sharedEvent)
+        val operation = RetryOperation(
+            requestId,
+            retryPolicy,
+            sharedEvent,
+            request.method,
+            request.url.toString(),
+        )
         operation.activity = activity
         retryOperations[requestId] = operation
         enqueueStandardAttempt(activity, operation, timedClient, request)
@@ -410,6 +416,7 @@ private object FetchClient {
             overwrite = overwrite,
             policy = retryPolicy,
             sharedEvent = sharedEvent,
+            url = request.url.toString(),
         )
 
         state.attempt = 1
@@ -665,6 +672,39 @@ private object FetchClient {
             }
         }, delay.toLong(), TimeUnit.MILLISECONDS)
         return true
+    }
+
+    fun activeRequests(): List<Map<String, Any>> {
+        val requests = retryOperations.values.mapNotNull { operation ->
+            synchronized(operation) {
+                if (operation.terminal || operation.cancelled) null else mapOf<String, Any>(
+                    "requestId" to operation.requestId,
+                    "method" to operation.method,
+                    "url" to operation.url,
+                    "type" to "request",
+                    "attempt" to operation.attempt.coerceAtLeast(1),
+                )
+            }
+        }.toMutableList()
+
+        downloads.values.mapNotNullTo(requests) { state ->
+            synchronized(state) {
+                if (state.terminal || state.cancelled) null else mapOf<String, Any>(
+                    "requestId" to state.requestId,
+                    "method" to "GET",
+                    "url" to state.url,
+                    "type" to "download",
+                    "attempt" to state.attempt.coerceAtLeast(1),
+                )
+            }
+        }
+
+        return requests.sortedBy { it["requestId"].toString() }
+    }
+
+    fun cancelAll(): Int {
+        val requestIds = (retryOperations.keys + downloads.keys).distinct()
+        return requestIds.count(::cancel)
     }
 
     fun cancel(requestId: String): Boolean {
@@ -1415,6 +1455,28 @@ object FetchFunctions {
                 )
             )
         }
+    }
+
+    class Active(
+        private val context: Context,
+    ) : BridgeFunction {
+
+        override fun execute(
+            parameters: Map<String, Any>,
+        ): Map<String, Any> = BridgeResponse.success(
+            mapOf("requests" to FetchClient.activeRequests())
+        )
+    }
+
+    class CancelAll(
+        private val context: Context,
+    ) : BridgeFunction {
+
+        override fun execute(
+            parameters: Map<String, Any>,
+        ): Map<String, Any> = BridgeResponse.success(
+            mapOf("cancelled" to FetchClient.cancelAll())
+        )
     }
 
     class Download(

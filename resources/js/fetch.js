@@ -1,8 +1,25 @@
 /** Official JavaScript client for victorycodedev/nativephp-fetch. */
 import { PendingRequest } from "./PendingRequest.js";
-import { bridgeCall, cancel, downloadNative, start } from "./bridge.js";
+import {
+  active,
+  bridgeCall,
+  cancel,
+  cancelAll,
+  downloadNative,
+  isActive,
+  start,
+} from "./bridge.js";
 
-export { PendingRequest, bridgeCall, cancel, downloadNative, start };
+export {
+  PendingRequest,
+  active,
+  bridgeCall,
+  cancel,
+  cancelAll,
+  downloadNative,
+  isActive,
+  start,
+};
 export const request = () => new PendingRequest();
 export const withHeaders = (headers) => request().withHeaders(headers);
 export const withHeader = (name, value) => request().withHeader(name, value);
@@ -49,6 +66,9 @@ export const Fetch = {
   delete: del,
   download,
   cancel,
+  active,
+  isActive,
+  cancelAll,
   start,
   downloadNative,
 };

@@ -35,6 +35,14 @@ final class FakeFetch
             return ['status' => 'success', 'cancelled' => false];
         }
 
+        if ($bridge === 'Fetch.Active') {
+            return ['status' => 'success', 'requests' => []];
+        }
+
+        if ($bridge === 'Fetch.CancelAll') {
+            return ['status' => 'success', 'cancelled' => 0];
+        }
+
         $request = new RecordedRequest($bridge, $payload);
         $this->requests[] = $request;
         $this->recordEvent(new FetchRequestStarted($request->requestId(), $request->method(), $request->url()));

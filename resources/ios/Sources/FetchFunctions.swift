@@ -408,6 +408,51 @@ private final class FetchClient: NSObject,
         }
     }
 
+    func activeRequests() -> [[String: Any]] {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let standard = retryOperations.values.compactMap { state -> [String: Any]? in
+            guard !state.terminal, !state.cancelled else { return nil }
+
+            return [
+                "requestId": state.requestId,
+                "method": state.request.httpMethod ?? "GET",
+                "url": state.request.url?.absoluteString ?? "",
+                "type": "request",
+                "attempt": max(state.attempt, 1),
+            ]
+        }
+
+        let download = downloads.values.compactMap { state -> [String: Any]? in
+            guard !state.terminal, !state.cancelled else { return nil }
+
+            return [
+                "requestId": state.requestId,
+                "method": "GET",
+                "url": state.request.url?.absoluteString ?? "",
+                "type": "download",
+                "attempt": max(state.attempt, 1),
+            ]
+        }
+
+        return (standard + download).sorted {
+            ($0["requestId"] as? String ?? "") < ($1["requestId"] as? String ?? "")
+        }
+    }
+
+    func cancelAll() -> Int {
+        lock.lock()
+        let requestIds = Set(retryOperations.keys).union(downloads.keys)
+        lock.unlock()
+
+        return requestIds.reduce(into: 0) { count, requestId in
+            if cancel(requestId: requestId) {
+                count += 1
+            }
+        }
+    }
+
     func cancel(
         requestId: String
     ) -> Bool {
@@ -1998,6 +2043,32 @@ enum FetchFunctions {
                 data: [
                     "request_id": requestId,
                     "cancelled": cancelled,
+                ]
+            )
+        }
+    }
+
+    class Active: BridgeFunction {
+
+        func execute(
+            parameters: [String: Any]
+        ) throws -> [String: Any] {
+            BridgeResponse.success(
+                data: [
+                    "requests": FetchClient.shared.activeRequests()
+                ]
+            )
+        }
+    }
+
+    class CancelAll: BridgeFunction {
+
+        func execute(
+            parameters: [String: Any]
+        ) throws -> [String: Any] {
+            BridgeResponse.success(
+                data: [
+                    "cancelled": FetchClient.shared.cancelAll()
                 ]
             )
         }

@@ -3,6 +3,7 @@
 namespace Victorycodedev\NativephpFetch\Facades;
 
 use Illuminate\Support\Facades\Facade;
+use Victorycodedev\NativephpFetch\ActiveRequest;
 use Victorycodedev\NativephpFetch\PendingRequest;
 use Victorycodedev\NativephpFetch\Testing\FakeFetch;
 
@@ -38,6 +39,9 @@ use Victorycodedev\NativephpFetch\Testing\FakeFetch;
  * @method static string delete(string $url, array $data = [])
  * @method static string download(string $url, string $destination, array $query = [], bool $overwrite = false)
  * @method static bool cancel(string $requestId)
+ * @method static list<ActiveRequest> active()
+ * @method static bool isActive(string $requestId)
+ * @method static int cancelAll()
  *
  * @see \Victorycodedev\NativephpFetch\Fetch
  */

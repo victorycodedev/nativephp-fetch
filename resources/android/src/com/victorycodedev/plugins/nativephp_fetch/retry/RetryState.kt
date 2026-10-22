@@ -8,6 +8,8 @@ internal class RetryOperation(
     val requestId: String,
     val policy: RetryPolicy?,
     val sharedEvent: String?,
+    val method: String,
+    val url: String,
 ) {
     lateinit var activity: FragmentActivity
     var attempt = 0

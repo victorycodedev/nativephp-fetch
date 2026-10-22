@@ -43,6 +43,18 @@
             "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Download",
             "ios": "FetchFunctions.Download",
             "description": "Stream an HTTP response to an application-writable file"
+        },
+        {
+            "name": "Fetch.Active",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.Active",
+            "ios": "FetchFunctions.Active",
+            "description": "List active native Fetch operations"
+        },
+        {
+            "name": "Fetch.CancelAll",
+            "android": "com.victorycodedev.plugins.nativephp_fetch.FetchFunctions.CancelAll",
+            "ios": "FetchFunctions.CancelAll",
+            "description": "Cancel all active native Fetch operations"
         }
     ],
     "android": {

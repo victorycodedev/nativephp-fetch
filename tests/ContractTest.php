@@ -24,6 +24,9 @@ it('keeps the manager and pending request public APIs synchronized', function ()
         'delete',
         'download',
         'cancel',
+        'active',
+        'isActive',
+        'cancelAll',
     ];
 
     $managerMethods = collect((new ReflectionClass(Fetch::class))->getMethods(
@@ -68,6 +71,9 @@ it('documents every manager API on the facade', function () {
         'delete',
         'download',
         'cancel',
+        'active',
+        'isActive',
+        'cancelAll',
     ] as $method) {
         expect($facade)->toContain(" {$method}(");
     }

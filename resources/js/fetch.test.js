@@ -85,6 +85,38 @@ test("builds downloads and cancellation with a pre-existing ID", async () => {
   });
 });
 
+test("lists and cancels active native requests", async () => {
+  bridgeResponse = {
+    ok: true,
+    json: async () => ({
+      data: {
+        requests: [
+          {
+            requestId: "request-1",
+            method: "POST",
+            url: "https://example.test",
+            type: "request",
+            attempt: 1,
+          },
+        ],
+      },
+    }),
+  };
+
+  assert.equal((await Fetch.active())[0].requestId, "request-1");
+  assert.equal(await Fetch.isActive("request-1"), true);
+  assert.equal(await Fetch.isActive("missing"), false);
+
+  bridgeResponse = {
+    ok: true,
+    json: async () => ({ data: { cancelled: 1 } }),
+  };
+
+  assert.equal(await Fetch.cancelAll(), 1);
+  assert.equal(calls[0].method, "Fetch.Active");
+  assert.equal(calls[3].method, "Fetch.CancelAll");
+});
+
 test("passes default and custom retry policies to native requests", async () => {
   await Fetch.retry().get("https://example.test");
   await Fetch.retry({

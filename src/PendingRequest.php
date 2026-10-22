@@ -83,7 +83,7 @@ class PendingRequest
     ): static {
         return $this->withHeader(
             'Authorization',
-            trim($type).' '.$token,
+            trim($type) . ' ' . $token,
         );
     }
 
@@ -425,6 +425,41 @@ class PendingRequest
         return (bool) ($response['cancelled'] ?? false);
     }
 
+    /** @return list<ActiveRequest> */
+    public function active(): array
+    {
+        $response = $this->bridgeCall('Fetch.Active', []);
+
+        if ($this->isErrorResponse($response)) {
+            throw new FetchException(
+                $response['message'] ?? 'Fetch was unable to inspect active requests.'
+            );
+        }
+
+        return array_values(array_map(
+            static fn(array $request): ActiveRequest => ActiveRequest::fromArray($request),
+            array_filter($response['requests'] ?? [], 'is_array'),
+        ));
+    }
+
+    public function isActive(string $requestId): bool
+    {
+        return collect($this->active())->contains(
+            fn(ActiveRequest $request): bool => $request->requestId === $requestId
+        );
+    }
+
+    public function cancelAll(): int
+    {
+        $response = $this->bridgeCall('Fetch.CancelAll', []);
+
+        if ($this->isErrorResponse($response)) {
+            return 0;
+        }
+
+        return max(0, (int) ($response['cancelled'] ?? 0));
+    }
+
     protected function send(
         string $method,
         string $url,
@@ -520,7 +555,7 @@ class PendingRequest
             return $this->baseUrl;
         }
 
-        return $this->baseUrl.'/'.ltrim($url, '/');
+        return $this->baseUrl . '/' . ltrim($url, '/');
     }
 
     protected function assertNoAttachments(string $mode): void
@@ -541,7 +576,7 @@ class PendingRequest
                     is_array($item), is_object($item) => json_encode($item, JSON_THROW_ON_ERROR),
                     default => (string) $item,
                 };
-                $pairs[] = urlencode((string) $name).'='.urlencode($normalized);
+                $pairs[] = urlencode((string) $name) . '=' . urlencode($normalized);
             }
         }
 

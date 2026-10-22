@@ -29,9 +29,15 @@ pending request mutate and return that same request.
 | `delete(url, data = [])` | Start a DELETE request. |
 | `download(url, destination, query = [], overwrite = false)` | Stream to a file. |
 | `cancel(requestId)` | Cancel active work or a retry delay. |
+| `active()` | Return immutable snapshots of active native operations. |
+| `isActive(requestId)` | Determine whether one logical operation is active. |
+| `cancelAll()` | Cancel every active operation and return the accepted count. |
 
 The facade also provides `fake()`, `restore()`, `isFaking()`, `fakeInstance()`,
 `assertSent()`, `assertNotSent()`, `assertSentCount()`, and `assertShared()`.
+
+Each item returned by `active()` is an `ActiveRequest` with `requestId`,
+`method`, `url`, `type`, and `attempt` properties.
 
 The Fetch manager uses Laravel's `Macroable` trait. Use `macro(name, callable)`
 or `mixin(object)` to register extensions, `hasMacro(name)` to inspect them,

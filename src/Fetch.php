@@ -198,6 +198,22 @@ class Fetch
         return $this->request()->cancel($requestId);
     }
 
+    /** @return list<ActiveRequest> */
+    public function active(): array
+    {
+        return $this->request()->active();
+    }
+
+    public function isActive(string $requestId): bool
+    {
+        return $this->request()->isActive($requestId);
+    }
+
+    public function cancelAll(): int
+    {
+        return $this->request()->cancelAll();
+    }
+
     protected function requireFake(): FakeFetch
     {
         return $this->fake ?? throw new \LogicException('Fetch assertions require Fetch::fake().');

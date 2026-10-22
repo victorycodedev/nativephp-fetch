@@ -77,6 +77,16 @@ const requestId = await Fetch.download(url, destination, {
 });
 ```
 
+## Active requests
+
+```javascript
+const requests = await Fetch.active();
+const running = await Fetch.isActive(requestId);
+const cancelled = await Fetch.cancelAll();
+```
+
+See [Active requests](/active-requests) for snapshot fields and lifecycle semantics.
+
 ## Multiple attachments
 
 ```javascript
