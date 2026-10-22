@@ -17,6 +17,7 @@ internal data class DownloadState(
     val partial: File,
     val overwrite: Boolean,
     val policy: RetryPolicy?,
+    val sharedEvent: String?,
     @Volatile var cancelled: Boolean = false,
     @Volatile var terminal: Boolean = false,
     @Volatile var attempt: Int = 0,

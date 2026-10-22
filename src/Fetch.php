@@ -47,6 +47,11 @@ class Fetch
         $this->requireFake()->assertSentCount($count);
     }
 
+    public function assertShared(string $event, ?Closure $callback = null): void
+    {
+        $this->requireFake()->assertShared($event, $callback);
+    }
+
     public function request(): PendingRequest
     {
         return new PendingRequest($this->fake);
@@ -97,6 +102,11 @@ class Fetch
     public function timeout(int $seconds): PendingRequest
     {
         return $this->request()->timeout($seconds);
+    }
+
+    public function shared(string $event): PendingRequest
+    {
+        return $this->request()->shared($event);
     }
 
     public function retry(

@@ -15,6 +15,7 @@ Laravel's HTTP client instead.
 - JSON, form-encoded, raw, and multipart request bodies
 - Multiple attachments and repeated multipart field names
 - Upload and download progress events
+- Named terminal events delivered to the active screen
 - Streaming file downloads
 - Opt-in retries with exponential backoff
 - Per-attempt timeouts and explicit cancellation
@@ -51,6 +52,7 @@ See the [JavaScript client guide](https://victorycodedev.github.io/nativephp-fet
 - [Uploads](https://victorycodedev.github.io/nativephp-fetch/uploads)
 - [Downloads](https://victorycodedev.github.io/nativephp-fetch/downloads)
 - [Events and responses](https://victorycodedev.github.io/nativephp-fetch/events)
+- [Shared events](https://victorycodedev.github.io/nativephp-fetch/shared-events)
 - [Retries and cancellation](https://victorycodedev.github.io/nativephp-fetch/retries-cancellation)
 - [API reference](https://victorycodedev.github.io/nativephp-fetch/api-reference)
 

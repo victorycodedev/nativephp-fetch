@@ -25,6 +25,8 @@ class PendingRequest
 
     protected ?array $retry = null;
 
+    protected ?string $sharedEvent = null;
+
     public function __construct(protected ?FakeFetch $fake = null)
     {
         $this->requestId = Uuid::uuid7()->toString();
@@ -135,6 +137,19 @@ class PendingRequest
         }
 
         $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    public function shared(string $event): static
+    {
+        $event = trim($event);
+
+        if ($event === '') {
+            throw new FetchException('Fetch shared event name cannot be empty.');
+        }
+
+        $this->sharedEvent = $event;
 
         return $this;
     }
@@ -374,6 +389,7 @@ class PendingRequest
                 'timeout' => $this->timeout,
                 'overwrite' => $overwrite,
                 'retry' => $this->retry,
+                'shared_event' => $this->sharedEvent,
             ],
         );
 
@@ -429,6 +445,7 @@ class PendingRequest
                 data: $data,
             ),
             'retry' => $this->retry,
+            'shared_event' => $this->sharedEvent,
         ];
 
         $response = $this->bridgeCall(

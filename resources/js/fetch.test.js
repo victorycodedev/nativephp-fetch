@@ -119,6 +119,18 @@ test("passes retry to downloads without leaking into new requests", async () => 
   assert.equal(calls[1].params.retry, null);
 });
 
+test("passes shared terminal event aliases to requests and downloads", async () => {
+  await Fetch.shared(" profile-saved ").post("https://example.test/profile");
+  await Fetch.shared("report-ready").download(
+    "https://example.test/report",
+    "/app/report.pdf",
+  );
+
+  assert.equal(calls[0].params.shared_event, "profile-saved");
+  assert.equal(calls[1].params.shared_event, "report-ready");
+  assert.throws(() => Fetch.shared("  "), /cannot be empty/);
+});
+
 test("validates retry policies", () => {
   assert.throws(() => Fetch.retry(-1), /times/);
   assert.throws(() => Fetch.retry({ delay: -1 }), /delay/);

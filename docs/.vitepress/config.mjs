@@ -29,6 +29,7 @@ export default defineConfig({
         items: [
           { text: "Uploads", link: "/uploads" },
           { text: "Downloads", link: "/downloads" },
+          { text: "Shared events", link: "/shared-events" },
           { text: "NativeComponent example", link: "/native-component" },
           { text: "Retries and cancellation", link: "/retries-cancellation" },
           { text: "Events and responses", link: "/events" },

@@ -42,7 +42,8 @@ private final class FetchClient: NSObject,
         query: [String: Any],
         body: [String: Any]?,
         timeout: TimeInterval,
-        retryPolicy: RetryPolicy?
+        retryPolicy: RetryPolicy?,
+        sharedEvent: String?
     ) throws {
 
         guard var components = URLComponents(string: urlString) else {
@@ -96,6 +97,13 @@ private final class FetchClient: NSObject,
                 code: "unsupported_method"
             )
 
+            emitSharedFailure(
+                sharedEvent: sharedEvent,
+                requestId: requestId,
+                message: "HTTP method \(method) is not supported.",
+                code: "unsupported_method"
+            )
+
             return
         }
 
@@ -131,7 +139,8 @@ private final class FetchClient: NSObject,
                 requestId: requestId,
                 request: request,
                 uploadFile: multipart.fileURL,
-                policy: retryPolicy
+                policy: retryPolicy,
+                sharedEvent: sharedEvent
             )
             retryOperations[requestId] = state
 
@@ -157,7 +166,8 @@ private final class FetchClient: NSObject,
             requestId: requestId,
             request: request,
             uploadFile: nil,
-            policy: retryPolicy
+            policy: retryPolicy,
+            sharedEvent: sharedEvent
         )
         retryOperations[requestId] = state
 
@@ -225,7 +235,8 @@ private final class FetchClient: NSObject,
         query: [String: Any],
         timeout: TimeInterval,
         overwrite: Bool,
-        retryPolicy: RetryPolicy?
+        retryPolicy: RetryPolicy?,
+        sharedEvent: String?
     ) throws {
         guard !destinationPath.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -360,7 +371,8 @@ private final class FetchClient: NSObject,
                 destinationKey: destinationKey,
                 partial: partial,
                 overwrite: overwrite,
-                policy: retryPolicy
+                policy: retryPolicy,
+                sharedEvent: sharedEvent
             )
             state.task = task
             state.attempt = 1
@@ -647,6 +659,14 @@ private final class FetchClient: NSObject,
                 path: state.destination.path,
                 bytesReceived: bytesReceived
             )
+            emitSharedDownloadCompleted(
+                sharedEvent: state.sharedEvent,
+                requestId: requestId,
+                httpStatus: response.statusCode,
+                headers: responseHeaders(response),
+                path: state.destination.path,
+                bytesReceived: bytesReceived
+            )
         } catch let error as FetchNativeError {
             lock.unlock()
 
@@ -818,6 +838,13 @@ private final class FetchClient: NSObject,
             headers: responseHeaders(httpResponse),
             body: body
         )
+        emitSharedCompleted(
+            sharedEvent: state.sharedEvent,
+            requestId: state.requestId,
+            httpStatus: httpResponse.statusCode,
+            headers: responseHeaders(httpResponse),
+            body: body
+        )
     }
 
     private func scheduleStandardRetry(
@@ -881,6 +908,12 @@ private final class FetchClient: NSObject,
         removeStandardStateLocked(state)
         lock.unlock()
         emitFailure(requestId: state.requestId, message: message, code: code)
+        emitSharedFailure(
+            sharedEvent: state.sharedEvent,
+            requestId: state.requestId,
+            message: message,
+            code: code
+        )
     }
 
     private func finishStandardCancelled(_ state: StandardRetryState) {
@@ -895,6 +928,10 @@ private final class FetchClient: NSObject,
         removeStandardStateLocked(state)
         lock.unlock()
         emitCancelled(requestId: state.requestId)
+        emitSharedCancelled(
+            sharedEvent: state.sharedEvent,
+            requestId: state.requestId
+        )
     }
 
     private func removeStandardStateLocked(_ state: StandardRetryState) {
@@ -1356,8 +1393,18 @@ private final class FetchClient: NSObject,
 
         if cancelled || state.cancelled {
             emitCancelled(requestId: requestId)
+            emitSharedCancelled(
+                sharedEvent: state.sharedEvent,
+                requestId: requestId
+            )
         } else {
             emitFailure(
+                requestId: requestId,
+                message: message,
+                code: code
+            )
+            emitSharedFailure(
+                sharedEvent: state.sharedEvent,
                 requestId: requestId,
                 message: message,
                 code: code
@@ -1603,6 +1650,86 @@ private final class FetchClient: NSObject,
         )
     }
 
+    private func emitSharedCompleted(
+        sharedEvent: String?,
+        requestId: String,
+        httpStatus: Int,
+        headers: [String: String],
+        body: String
+    ) {
+        emitShared(
+            name: sharedEvent,
+            payload: [
+                "requestId": requestId,
+                "status": "completed",
+                "httpStatus": httpStatus,
+                "headers": headers,
+                "body": body,
+            ]
+        )
+    }
+
+    private func emitSharedDownloadCompleted(
+        sharedEvent: String?,
+        requestId: String,
+        httpStatus: Int,
+        headers: [String: String],
+        path: String,
+        bytesReceived: Int64
+    ) {
+        emitShared(
+            name: sharedEvent,
+            payload: [
+                "requestId": requestId,
+                "status": "completed",
+                "httpStatus": httpStatus,
+                "headers": headers,
+                "path": path,
+                "bytesReceived": bytesReceived,
+            ]
+        )
+    }
+
+    private func emitSharedFailure(
+        sharedEvent: String?,
+        requestId: String,
+        message: String,
+        code: String?
+    ) {
+        emitShared(
+            name: sharedEvent,
+            payload: [
+                "requestId": requestId,
+                "status": "failed",
+                "message": message,
+                "code": code ?? NSNull(),
+            ]
+        )
+    }
+
+    private func emitSharedCancelled(
+        sharedEvent: String?,
+        requestId: String
+    ) {
+        emitShared(
+            name: sharedEvent,
+            payload: [
+                "requestId": requestId,
+                "status": "cancelled",
+            ]
+        )
+    }
+
+    private func emitShared(name: String?, payload: [String: Any]) {
+        guard let name, !name.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty else {
+            return
+        }
+
+        dispatchEvent(name: name, payload: payload)
+    }
+
     private func emitRetrying(
         requestId: String,
         attempt: Int,
@@ -1777,6 +1904,8 @@ enum FetchFunctions {
                 parameters["body"]
                     as? [String: Any]
             let retry = retryPolicy(from: parameters["retry"])
+            let sharedEvent = (parameters["shared_event"] as? String)
+                .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
 
             do {
                 try FetchClient.shared.start(
@@ -1787,7 +1916,8 @@ enum FetchFunctions {
                     query: query,
                     body: body,
                     timeout: timeout,
-                    retryPolicy: retry
+                    retryPolicy: retry,
+                    sharedEvent: sharedEvent
                 )
 
                 return BridgeResponse.success(
@@ -1904,6 +2034,8 @@ enum FetchFunctions {
             let overwrite = parameters["overwrite"] as? Bool
                 ?? false
             let retry = retryPolicy(from: parameters["retry"])
+            let sharedEvent = (parameters["shared_event"] as? String)
+                .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
             let query = parameters["query"] as? [String: Any]
                 ?? [:]
             var headers: [String: String] = [:]
@@ -1923,7 +2055,8 @@ enum FetchFunctions {
                     query: query,
                     timeout: timeout,
                     overwrite: overwrite,
-                    retryPolicy: retry
+                    retryPolicy: retry,
+                    sharedEvent: sharedEvent
                 )
 
                 return BridgeResponse.success(

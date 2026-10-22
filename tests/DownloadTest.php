@@ -45,6 +45,7 @@ it('builds a complete fluent download bridge payload', function () {
                 'timeout' => 60,
                 'overwrite' => true,
                 'retry' => null,
+                'shared_event' => null,
             ],
         ]);
 });

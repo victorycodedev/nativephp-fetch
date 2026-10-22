@@ -1,5 +1,7 @@
 # Events and responses
 
+Need a request to notify a different screen after navigation? See [Shared events](/shared-events).
+
 NativePHP component events are handled by the active NativeComponent with
 `#[On]` or `$this->on()`. The started, completed, and failed lifecycle events
 are also broadcast through Laravel so application-wide listeners may consume

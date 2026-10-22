@@ -15,6 +15,7 @@ export const withBody = (body, contentType = "text/plain") =>
   request().withBody(body, contentType);
 export const timeout = (seconds) => request().timeout(seconds);
 export const retry = (options = 3) => request().retry(options);
+export const shared = (event) => request().shared(event);
 export const attach = (name, path, filename = null, mimeType = null) =>
   request().attach(name, path, filename, mimeType);
 export const attachMany = (attachments) => request().attachMany(attachments);
@@ -38,6 +39,7 @@ export const Fetch = {
   withBody,
   timeout,
   retry,
+  shared,
   attach,
   attachMany,
   get,

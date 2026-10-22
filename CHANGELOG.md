@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added request-local `baseUrl()` support for relative request and download URLs.
 - Added `FetchResponse::statusIs()` and named helpers for common HTTP statuses.
 - Added application-wide Laravel listeners for the existing request started, completed, and failed events.
+- Added opt-in named terminal events for delivering request, upload, and download results to the active NativePHP screen.
 
 ### Changed
 

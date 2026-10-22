@@ -8,6 +8,7 @@ final class DownloadState {
     let partial: URL
     let overwrite: Bool
     let policy: RetryPolicy?
+    let sharedEvent: String?
     var cancelled = false
     var terminal = false
     var lastProgressAt: TimeInterval = 0
@@ -15,7 +16,7 @@ final class DownloadState {
     weak var task: URLSessionTask?
     var retryWorkItem: DispatchWorkItem?
 
-    init(requestId: String, request: URLRequest, destination: URL, destinationKey: String, partial: URL, overwrite: Bool, policy: RetryPolicy?) {
+    init(requestId: String, request: URLRequest, destination: URL, destinationKey: String, partial: URL, overwrite: Bool, policy: RetryPolicy?, sharedEvent: String?) {
         self.requestId = requestId
         self.request = request
         self.destination = destination
@@ -23,5 +24,6 @@ final class DownloadState {
         self.partial = partial
         self.overwrite = overwrite
         self.policy = policy
+        self.sharedEvent = sharedEvent
     }
 }

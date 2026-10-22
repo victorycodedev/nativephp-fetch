@@ -18,6 +18,7 @@ pending request mutate and return that same request.
 | `asForm()` | Select RFC 1738 form body mode. |
 | `withBody(body, contentType = 'text/plain')` | Select a raw string body. |
 | `timeout(seconds)` | Set the per-attempt native timeout. |
+| `shared(event)` | Emit one named terminal event to the screen active when the request finishes. |
 | `retry(times = 3, delay = 500, multiplier = 2.0, maxDelay = 30000, statuses = [])` | Enable and configure native retries. `delay` and `maxDelay` are in milliseconds. |
 | `attach(...)` | Append one multipart file. |
 | `attachMany(attachments)` | Validate and append multiple files. |
@@ -30,7 +31,7 @@ pending request mutate and return that same request.
 | `cancel(requestId)` | Cancel active work or a retry delay. |
 
 The facade also provides `fake()`, `restore()`, `isFaking()`, `fakeInstance()`,
-`assertSent()`, `assertNotSent()`, and `assertSentCount()`.
+`assertSent()`, `assertNotSent()`, `assertSentCount()`, and `assertShared()`.
 
 The Fetch manager uses Laravel's `Macroable` trait. Use `macro(name, callable)`
 or `mixin(object)` to register extensions, `hasMacro(name)` to inspect them,
@@ -91,3 +92,7 @@ both cases.
 
 The remaining progress, retry, cancellation, and download-completed events are
 component-only.
+
+`shared(event)` is separate from the typed events above. It opts one request
+into a dynamic named terminal event for the active screen. See
+[Shared events](/shared-events) for its payloads and delivery semantics.
