@@ -35,6 +35,8 @@ excludes future major versions.
 Read the complete documentation at
 [victorycodedev.github.io/nativephp-fetch](https://victorycodedev.github.io/nativephp-fetch/).
 
+See [what's new](https://victorycodedev.github.io/nativephp-fetch/whats-new) for short, versioned examples of recently added APIs.
+
 ## Installation
 
 See the [installation guide](https://victorycodedev.github.io/nativephp-fetch/getting-started).

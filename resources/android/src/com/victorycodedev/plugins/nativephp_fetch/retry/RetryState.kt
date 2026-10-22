@@ -17,4 +17,8 @@ internal class RetryOperation(
     var terminal = false
     var call: Call? = null
     var retryFuture: ScheduledFuture<*>? = null
+    var state = "running"
+    var bytesTransferred = 0L
+    var bytesTotal: Long? = null
+    var nextRetryAt: Long? = null
 }

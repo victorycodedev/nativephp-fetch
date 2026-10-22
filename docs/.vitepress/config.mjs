@@ -12,6 +12,7 @@ export default defineConfig({
     search: { provider: "local" },
     nav: [
       { text: "Guide", link: "/getting-started" },
+      { text: "What's New", link: "/whats-new" },
       { text: "API", link: "/api-reference" },
       { text: "GitHub", link: "https://github.com/victorycodedev/nativephp-fetch" },
     ],
@@ -20,6 +21,7 @@ export default defineConfig({
         text: "Getting started",
         items: [
           { text: "Introduction", link: "/" },
+          { text: "What's new", link: "/whats-new" },
           { text: "Installation", link: "/getting-started" },
           { text: "Making requests", link: "/requests" },
         ],

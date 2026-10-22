@@ -189,6 +189,9 @@ private object FetchClient {
         synchronized(operation) {
             if (operation.cancelled || operation.terminal) return
             operation.attempt++
+            operation.state = "running"
+            operation.nextRetryAt = null
+            operation.bytesTransferred = 0L
         }
 
         val call = client.newCall(request)
@@ -647,6 +650,8 @@ private object FetchClient {
             state.partial.delete()
             val value = retryDelay(policy, state.attempt, retryAfter)
             state.attempt++
+            state.state = "waiting_retry"
+            state.nextRetryAt = System.currentTimeMillis() + value
             value to policy.maxAttempts
         }
 
@@ -665,6 +670,10 @@ private object FetchClient {
             synchronized(state) {
                 if (state.cancelled || state.terminal) return@schedule
                 state.partial.delete()
+                state.state = "running"
+                state.nextRetryAt = null
+                state.bytesTransferred = 0L
+                state.bytesTotal = null
                 val call = client.newCall(request)
                 state.call = call
                 calls[state.requestId] = call
@@ -683,6 +692,14 @@ private object FetchClient {
                     "url" to operation.url,
                     "type" to "request",
                     "attempt" to operation.attempt.coerceAtLeast(1),
+                    "state" to operation.state,
+                    "bytesTransferred" to operation.bytesTransferred,
+                    "bytesTotal" to (operation.bytesTotal ?: JSONObject.NULL),
+                    "progress" to progressValue(
+                        operation.bytesTransferred,
+                        operation.bytesTotal,
+                    ),
+                    "nextRetryAt" to (operation.nextRetryAt ?: JSONObject.NULL),
                 )
             }
         }.toMutableList()
@@ -695,6 +712,11 @@ private object FetchClient {
                     "url" to state.url,
                     "type" to "download",
                     "attempt" to state.attempt.coerceAtLeast(1),
+                    "state" to state.state,
+                    "bytesTransferred" to state.bytesTransferred,
+                    "bytesTotal" to (state.bytesTotal ?: JSONObject.NULL),
+                    "progress" to progressValue(state.bytesTransferred, state.bytesTotal),
+                    "nextRetryAt" to (state.nextRetryAt ?: JSONObject.NULL),
                 )
             }
         }
@@ -1101,6 +1123,13 @@ private object FetchClient {
             0.0
         }
 
+        retryOperations[requestId]?.let { operation ->
+            synchronized(operation) {
+                operation.bytesTransferred = safeSent
+                operation.bytesTotal = safeTotal.takeIf { it > 0L }
+            }
+        }
+
         val payload = JSONObject().apply {
             put("requestId", requestId)
             put("bytesSent", safeSent)
@@ -1130,6 +1159,13 @@ private object FetchClient {
                     .coerceIn(0.0, 1.0)
             bytesTotal == 0L -> 0.0
             else -> null
+        }
+
+        downloads[requestId]?.let { state ->
+            synchronized(state) {
+                state.bytesTransferred = safeReceived
+                state.bytesTotal = bytesTotal
+            }
         }
 
         val payload = JSONObject().apply {
@@ -1234,7 +1270,10 @@ private object FetchClient {
                 operation.attempt >= policy.maxAttempts
             ) return false
 
-            retryDelay(policy, operation.attempt, retryAfter)
+            retryDelay(policy, operation.attempt, retryAfter).also {
+                operation.state = "waiting_retry"
+                operation.nextRetryAt = System.currentTimeMillis() + it
+            }
         }
 
         emitRetrying(
@@ -1255,6 +1294,13 @@ private object FetchClient {
         }, delay.toLong(), TimeUnit.MILLISECONDS)
         return true
     }
+
+    private fun progressValue(bytesTransferred: Long, bytesTotal: Long?): Any =
+        if (bytesTotal != null && bytesTotal > 0L) {
+            (bytesTransferred.toDouble() / bytesTotal.toDouble()).coerceIn(0.0, 1.0)
+        } else {
+            JSONObject.NULL
+        }
 
     private fun isRetryableNetwork(code: String): Boolean = code in setOf(
         "timeout",

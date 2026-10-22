@@ -83,7 +83,7 @@ class PendingRequest
     ): static {
         return $this->withHeader(
             'Authorization',
-            trim($type) . ' ' . $token,
+            trim($type).' '.$token,
         );
     }
 
@@ -437,7 +437,7 @@ class PendingRequest
         }
 
         return array_values(array_map(
-            static fn(array $request): ActiveRequest => ActiveRequest::fromArray($request),
+            static fn (array $request): ActiveRequest => ActiveRequest::fromArray($request),
             array_filter($response['requests'] ?? [], 'is_array'),
         ));
     }
@@ -445,7 +445,7 @@ class PendingRequest
     public function isActive(string $requestId): bool
     {
         return collect($this->active())->contains(
-            fn(ActiveRequest $request): bool => $request->requestId === $requestId
+            fn (ActiveRequest $request): bool => $request->requestId === $requestId
         );
     }
 
@@ -555,7 +555,7 @@ class PendingRequest
             return $this->baseUrl;
         }
 
-        return $this->baseUrl . '/' . ltrim($url, '/');
+        return $this->baseUrl.'/'.ltrim($url, '/');
     }
 
     protected function assertNoAttachments(string $mode): void
@@ -576,7 +576,7 @@ class PendingRequest
                     is_array($item), is_object($item) => json_encode($item, JSON_THROW_ON_ERROR),
                     default => (string) $item,
                 };
-                $pairs[] = urlencode((string) $name) . '=' . urlencode($normalized);
+                $pairs[] = urlencode((string) $name).'='.urlencode($normalized);
             }
         }
 

@@ -97,13 +97,20 @@ test("lists and cancels active native requests", async () => {
             url: "https://example.test",
             type: "request",
             attempt: 1,
+            state: "running",
+            bytesTransferred: 50,
+            bytesTotal: 100,
+            progress: 0.5,
+            nextRetryAt: null,
           },
         ],
       },
     }),
   };
 
-  assert.equal((await Fetch.active())[0].requestId, "request-1");
+  const activeRequests = await Fetch.active();
+  assert.equal(activeRequests[0].requestId, "request-1");
+  assert.equal(activeRequests[0].progress, 0.5);
   assert.equal(await Fetch.isActive("request-1"), true);
   assert.equal(await Fetch.isActive("missing"), false);
 

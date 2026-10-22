@@ -213,6 +213,19 @@ describe('Documentation', function () {
             'Event::listen(FetchRequestCompleted::class',
         );
     });
+
+    it('keeps the versioned whats new page linked to full feature guides', function () {
+        $whatsNew = file_get_contents($this->pluginPath.'/docs/whats-new.md');
+        $config = file_get_contents($this->pluginPath.'/docs/.vitepress/config.mjs');
+
+        expect($whatsNew)
+            ->toContain('## 1.2.0', '## 1.1.0', '## 1.0.0')
+            ->toContain('[Shared events](/shared-events)')
+            ->toContain('[Active requests](/active-requests)')
+            ->and(strpos($whatsNew, '## 1.2.0'))->toBeLessThan(strpos($whatsNew, '## 1.1.0'))
+            ->and(strpos($whatsNew, '## 1.1.0'))->toBeLessThan(strpos($whatsNew, '## 1.0.0'))
+            ->and($config)->toContain('/whats-new');
+    });
 });
 
 describe('Composer Configuration', function () {

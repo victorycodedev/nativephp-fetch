@@ -187,6 +187,9 @@ private final class FetchClient: NSObject,
             return
         }
         state.attempt += 1
+        state.state = "running"
+        state.nextRetryAt = nil
+        state.bytesTransferred = 0
         lock.unlock()
 
         let completion: (Data?, URLResponse?, Error?) -> Void = {
@@ -421,6 +424,14 @@ private final class FetchClient: NSObject,
                 "url": state.request.url?.absoluteString ?? "",
                 "type": "request",
                 "attempt": max(state.attempt, 1),
+                "state": state.state,
+                "bytesTransferred": state.bytesTransferred,
+                "bytesTotal": state.bytesTotal.map { $0 as Any } ?? NSNull(),
+                "progress": snapshotProgress(
+                    transferred: state.bytesTransferred,
+                    total: state.bytesTotal
+                ),
+                "nextRetryAt": state.nextRetryAt.map { $0 as Any } ?? NSNull(),
             ]
         }
 
@@ -433,12 +444,29 @@ private final class FetchClient: NSObject,
                 "url": state.request.url?.absoluteString ?? "",
                 "type": "download",
                 "attempt": max(state.attempt, 1),
+                "state": state.state,
+                "bytesTransferred": state.bytesTransferred,
+                "bytesTotal": state.bytesTotal.map { $0 as Any } ?? NSNull(),
+                "progress": snapshotProgress(
+                    transferred: state.bytesTransferred,
+                    total: state.bytesTotal
+                ),
+                "nextRetryAt": state.nextRetryAt.map { $0 as Any } ?? NSNull(),
             ]
         }
 
         return (standard + download).sorted {
             ($0["requestId"] as? String ?? "") < ($1["requestId"] as? String ?? "")
         }
+    }
+
+    private func snapshotProgress(
+        transferred: Int64,
+        total: Int64?
+    ) -> Any {
+        guard let total, total > 0 else { return NSNull() }
+
+        return min(max(Double(transferred) / Double(total), 0), 1)
     }
 
     func cancelAll() -> Int {
@@ -533,6 +561,13 @@ private final class FetchClient: NSObject,
             uploadProgressTimes[requestId] = now
         }
 
+        if let requestId, let state = retryOperations[requestId] {
+            state.bytesTransferred = max(totalBytesSent, 0)
+            state.bytesTotal = totalBytesExpectedToSend > 0
+                ? totalBytesExpectedToSend
+                : nil
+        }
+
         lock.unlock()
 
         guard let requestId, shouldEmit else {
@@ -588,6 +623,9 @@ private final class FetchClient: NSObject,
             totalBytesWritten >= $0
         } ?? false
         let shouldEmit = finished || now - state.lastProgressAt >= 0.1
+
+        state.bytesTransferred = max(totalBytesWritten, 0)
+        state.bytesTotal = total
 
         if shouldEmit {
             state.lastProgressAt = now
@@ -913,6 +951,9 @@ private final class FetchClient: NSObject,
             retryAfter: retryAfter
         )
         let nextAttempt = state.attempt + 1
+        state.state = "waiting_retry"
+        state.nextRetryAt = Int64(Date().timeIntervalSince1970 * 1000)
+            + Int64(delay)
         let item = DispatchWorkItem { [weak self, weak state] in
             guard let self, let state else { return }
             self.startStandardAttempt(state)
@@ -1481,6 +1522,9 @@ private final class FetchClient: NSObject,
         )
         let nextAttempt = state.attempt + 1
         state.attempt = nextAttempt
+        state.state = "waiting_retry"
+        state.nextRetryAt = Int64(Date().timeIntervalSince1970 * 1000)
+            + Int64(delay)
         try? FileManager.default.removeItem(at: state.partial)
 
         let item = DispatchWorkItem { [weak self, weak state] in
@@ -1491,6 +1535,10 @@ private final class FetchClient: NSObject,
                 return
             }
             try? FileManager.default.removeItem(at: state.partial)
+            state.state = "running"
+            state.nextRetryAt = nil
+            state.bytesTransferred = 0
+            state.bytesTotal = nil
             let task = self.session.downloadTask(with: state.request)
             state.task = task
             self.tasks[state.requestId] = task

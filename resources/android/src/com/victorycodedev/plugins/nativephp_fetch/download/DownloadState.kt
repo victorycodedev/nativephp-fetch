@@ -24,4 +24,8 @@ internal data class DownloadState(
     @Volatile var attempt: Int = 0,
     @Volatile var call: Call? = null,
     @Volatile var retryFuture: ScheduledFuture<*>? = null,
+    @Volatile var state: String = "running",
+    @Volatile var bytesTransferred: Long = 0L,
+    @Volatile var bytesTotal: Long? = null,
+    @Volatile var nextRetryAt: Long? = null,
 )

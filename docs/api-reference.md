@@ -37,7 +37,9 @@ The facade also provides `fake()`, `restore()`, `isFaking()`, `fakeInstance()`,
 `assertSent()`, `assertNotSent()`, `assertSentCount()`, and `assertShared()`.
 
 Each item returned by `active()` is an `ActiveRequest` with `requestId`,
-`method`, `url`, `type`, and `attempt` properties.
+`method`, `url`, `type`, `attempt`, `state`, `bytesTransferred`, `bytesTotal`,
+`progress`, and `nextRetryAt` properties. See [Active requests](/active-requests)
+for progress and retry-state semantics.
 
 The Fetch manager uses Laravel's `Macroable` trait. Use `macro(name, callable)`
 or `mixin(object)` to register extensions, `hasMacro(name)` to inspect them,
