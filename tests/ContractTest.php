@@ -145,7 +145,10 @@ it('distinguishes Android call timeouts from explicit cancellation', function ()
     );
 
     expect($android)
-        ->toContain('if (operation.cancelled)')
+        ->toContain(
+            'private fun isRetryCancelled(operation: RetryOperation)',
+            'if (isRetryCancelled(operation))',
+        )
         ->toContain('val cancelled = state.cancelled')
         ->not->toContain('if (call.isCanceled() || operation.cancelled)')
         ->not->toContain('val cancelled = call?.isCanceled() == true || state.cancelled');

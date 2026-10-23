@@ -12,8 +12,6 @@ private final class FetchClient: NSObject,
 
     private var requestIdsByTaskIdentifier: [Int: String] = [:]
 
-    private var temporaryUploadFiles: [String: URL] = [:]
-
     private var uploadProgressTimes: [String: TimeInterval] = [:]
 
     private var downloads: [String: DownloadState] = [:]
@@ -146,7 +144,7 @@ private final class FetchClient: NSObject,
                 policy: retryPolicy,
                 sharedEvent: sharedEvent
             )
-            retryOperations[requestId] = state
+            storeStandardState(state)
 
             emitStarted(
                 requestId: requestId,
@@ -173,7 +171,7 @@ private final class FetchClient: NSObject,
             policy: retryPolicy,
             sharedEvent: sharedEvent
         )
-        retryOperations[requestId] = state
+        storeStandardState(state)
 
         emitStarted(
             requestId: requestId,
@@ -195,6 +193,8 @@ private final class FetchClient: NSObject,
         state.state = "running"
         state.nextRetryAt = nil
         state.bytesTransferred = 0
+        state.bytesTotal = nil
+        state.retryWorkItem = nil
         lock.unlock()
 
         if resumed {
@@ -240,6 +240,12 @@ private final class FetchClient: NSObject,
         requestIdsByTaskIdentifier[task.taskIdentifier] = state.requestId
         lock.unlock()
         task.resume()
+    }
+
+    private func storeStandardState(_ state: StandardRetryState) {
+        lock.lock()
+        retryOperations[state.requestId] = state
+        lock.unlock()
     }
 
     func download(
@@ -795,10 +801,10 @@ private final class FetchClient: NSObject,
     ) {
         lock.lock()
         let requestId = requestIdsByTaskIdentifier[task.taskIdentifier]
-        let isDownload = requestId.flatMap { downloads[$0] } != nil
+        let downloadState = requestId.flatMap { downloads[$0] }
         lock.unlock()
 
-        guard isDownload, let requestId else {
+        guard let requestId, let downloadState else {
             return
         }
 
@@ -811,7 +817,7 @@ private final class FetchClient: NSObject,
             } else {
                 let reason = failureCode(urlError)
                 if isRetryableNetwork(reason), scheduleDownloadRetry(
-                    state: downloads[requestId],
+                    state: downloadState,
                     reason: reason
                 ) {
                     return
@@ -824,7 +830,7 @@ private final class FetchClient: NSObject,
             }
         } else if let error {
             if scheduleDownloadRetry(
-                state: downloads[requestId],
+                state: downloadState,
                 reason: "network_error"
             ) {
                 return
@@ -849,7 +855,11 @@ private final class FetchClient: NSObject,
         response: URLResponse?,
         error: Error?
     ) {
-        if state.cancelled {
+        lock.lock()
+        let cancelled = state.cancelled
+        lock.unlock()
+
+        if cancelled {
             finishStandardCancelled(state)
             return
         }
@@ -1033,6 +1043,9 @@ private final class FetchClient: NSObject,
     }
 
     private func removeStandardStateLocked(_ state: StandardRetryState) {
+        state.retryWorkItem?.cancel()
+        state.retryWorkItem = nil
+
         if let task = state.task {
             requestIdsByTaskIdentifier.removeValue(forKey: task.taskIdentifier)
         }
@@ -1042,84 +1055,6 @@ private final class FetchClient: NSObject,
         if let uploadFile = state.uploadFile {
             try? FileManager.default.removeItem(at: uploadFile)
         }
-    }
-
-    private func handleCompletion(
-        requestId: String,
-        data: Data?,
-        response: URLResponse?,
-        error: Error?
-    ) {
-        cleanupTask(
-            requestId: requestId
-        )
-
-        if let urlError = error as? URLError {
-
-            if urlError.code == .cancelled {
-                emitCancelled(
-                    requestId: requestId
-                )
-
-                return
-            }
-
-            emitFailure(
-                requestId: requestId,
-                message: urlError.localizedDescription,
-                code: failureCode(urlError)
-            )
-
-            return
-        }
-
-        if let error {
-            emitFailure(
-                requestId: requestId,
-                message: error.localizedDescription,
-                code: "network_error"
-            )
-
-            return
-        }
-
-        guard let httpResponse =
-            response as? HTTPURLResponse
-        else {
-            emitFailure(
-                requestId: requestId,
-                message: "The server returned an invalid HTTP response.",
-                code: "invalid_response"
-            )
-
-            return
-        }
-
-        let responseBody: String
-
-        if let data {
-            responseBody = String(
-                data: data,
-                encoding: .utf8
-            ) ?? ""
-        } else {
-            responseBody = ""
-        }
-
-        var responseHeaders: [String: String] = [:]
-
-        for (key, value) in httpResponse.allHeaderFields {
-            responseHeaders[
-                String(describing: key)
-            ] = String(describing: value)
-        }
-
-        emitCompleted(
-            requestId: requestId,
-            status: httpResponse.statusCode,
-            headers: responseHeaders,
-            body: responseBody
-        )
     }
 
     private func applyBody(
@@ -1347,65 +1282,6 @@ private final class FetchClient: NSObject,
             )
     }
 
-    private func storeTask(
-        _ task: URLSessionTask,
-        requestId: String,
-        temporaryUploadFile: URL? = nil
-    ) {
-        lock.lock()
-
-        tasks[requestId] = task
-
-        requestIdsByTaskIdentifier[
-            task.taskIdentifier
-        ] = requestId
-
-        if let temporaryUploadFile {
-            temporaryUploadFiles[
-                requestId
-            ] = temporaryUploadFile
-        }
-
-        lock.unlock()
-    }
-
-    private func cleanupTask(
-        requestId: String
-    ) {
-        lock.lock()
-
-        let task =
-            tasks.removeValue(
-                forKey: requestId
-            )
-
-        if let task {
-            requestIdsByTaskIdentifier
-                .removeValue(
-                    forKey: task.taskIdentifier
-                )
-        }
-
-        let temporaryURL =
-            temporaryUploadFiles
-                .removeValue(
-                    forKey: requestId
-                )
-
-        uploadProgressTimes.removeValue(
-            forKey: requestId
-        )
-
-        lock.unlock()
-
-        if let temporaryURL {
-            try? FileManager.default
-                .removeItem(
-                    at: temporaryURL
-                )
-        }
-    }
-
     private func promoteDownload(
         location: URL,
         state: DownloadState
@@ -1551,6 +1427,7 @@ private final class FetchClient: NSObject,
             state.nextRetryAt = nil
             state.bytesTransferred = 0
             state.bytesTotal = nil
+            state.retryWorkItem = nil
             let task = self.session.downloadTask(with: state.request)
             state.task = task
             self.tasks[state.requestId] = task
@@ -1589,6 +1466,8 @@ private final class FetchClient: NSObject,
         taskIdentifier: Int?,
         destinationKey: String
     ) {
+        downloads[requestId]?.retryWorkItem?.cancel()
+        downloads[requestId]?.retryWorkItem = nil
         tasks.removeValue(forKey: requestId)
         downloads.removeValue(forKey: requestId)
         activeDownloadDestinations.removeValue(forKey: destinationKey)

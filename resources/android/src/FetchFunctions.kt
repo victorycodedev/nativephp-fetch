@@ -196,6 +196,8 @@ private object FetchClient {
             operation.state = "running"
             operation.nextRetryAt = null
             operation.bytesTransferred = 0L
+            operation.bytesTotal = null
+            operation.retryFuture = null
             isRetry
         }
 
@@ -211,7 +213,7 @@ private object FetchClient {
             override fun onFailure(call: Call, exception: IOException) {
                 // OkHttp also marks a call as canceled when its call timeout fires.
                 // Only our logical flag proves that Fetch.Cancel was requested.
-                if (operation.cancelled) {
+                if (isRetryCancelled(operation)) {
                     finishRetryCancelled(activity, operation)
                     return
                 }
@@ -232,7 +234,7 @@ private object FetchClient {
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    if (operation.cancelled) {
+                    if (isRetryCancelled(operation)) {
                         finishRetryCancelled(activity, operation)
                         return
                     }
@@ -688,6 +690,7 @@ private object FetchClient {
                 state.nextRetryAt = null
                 state.bytesTransferred = 0L
                 state.bytesTotal = null
+                state.retryFuture = null
                 val call = client.newCall(request)
                 state.call = call
                 calls[state.requestId] = call
@@ -885,6 +888,10 @@ private object FetchClient {
         state: DownloadState,
         removePartial: Boolean,
     ) {
+        state.retryFuture?.cancel(false)
+        state.retryFuture = null
+        state.call = null
+
         if (call != null) {
             calls.remove(state.requestId, call)
         } else {
@@ -1341,6 +1348,11 @@ private object FetchClient {
             }
         }
 
+    private fun isRetryCancelled(operation: RetryOperation): Boolean =
+        synchronized(operation) {
+            operation.cancelled
+        }
+
     private fun finishRetryFailure(
         activity: FragmentActivity,
         operation: RetryOperation,
@@ -1348,6 +1360,9 @@ private object FetchClient {
         code: String,
     ) {
         if (!markRetryTerminal(operation)) return
+        operation.retryFuture?.cancel(false)
+        operation.retryFuture = null
+        operation.call = null
         calls.remove(operation.requestId)
         retryOperations.remove(operation.requestId, operation)
         emitFailure(activity, operation.requestId, message, code, operation.sharedEvent)
@@ -1362,6 +1377,8 @@ private object FetchClient {
             operation.cancelled = true
             operation.terminal = true
             operation.retryFuture?.cancel(false)
+            operation.retryFuture = null
+            operation.call = null
         }
         calls.remove(operation.requestId)
         retryOperations.remove(operation.requestId, operation)

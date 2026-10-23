@@ -1,7 +1,5 @@
 # What's new
 
-This page gives a quick view of newly added APIs. Newer releases appear first; follow the links for complete behavior and examples.
-
 ## 1.2.0 (upcoming)
 
 ### Shared terminal events
@@ -52,22 +50,6 @@ public function refreshActivity(): void
 
 The event covers starts, throttled progress, retry state changes, and terminal removal. See [Active requests](/active-requests) for the complete example.
 
-## 1.1.0
+### Reliability and compatibility
 
-Version 1.1 added reusable macros, request-local base URLs, common `FetchResponse` status helpers, and application-wide Laravel delivery for the existing started, completed, and failed events.
-
-```php
-Fetch::baseUrl('https://api.example.com')->get('/users');
-
-if ($response->unprocessableEntity()) {
-    // HTTP 422
-}
-```
-
-See [Making requests](/requests), [Events and responses](/events), and the [API reference](/api-reference).
-
-## 1.0.0
-
-The first release introduced asynchronous native requests, uploads, downloads, progress, retries, cancellation, PHP and JavaScript clients, and Fetch fakes.
-
-See the [installation guide](/getting-started) and [feature documentation](/requests).
+This release also hardens retry snapshot resets, terminal cleanup, temporary upload cleanup, and Android/iOS lifecycle parity. Existing request methods, bridge names, event classes, event payloads, retry behavior, and NativePHP `#[On(...)]` listeners remain backward compatible.
