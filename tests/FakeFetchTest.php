@@ -6,6 +6,7 @@ use Victorycodedev\NativephpFetch\Events\FetchRequestStarted;
 use Victorycodedev\NativephpFetch\Fetch;
 use Victorycodedev\NativephpFetch\FetchResponse;
 use Victorycodedev\NativephpFetch\Testing\RecordedRequest;
+use Victorycodedev\NativephpFetch\Testing\RecordedSharedEvent;
 
 beforeEach(function () {
     $GLOBALS['fetch_bridge_calls'] = [];
@@ -59,4 +60,40 @@ it('records events without using Laravels global event dispatcher', function () 
     expect($source)
         ->not->toContain('Illuminate\\Container\\Container')
         ->not->toContain("make('events')");
+});
+
+it('records shared terminal events separately from existing native events', function () {
+    $fetch = new Fetch;
+    $fake = $fetch->fake([
+        '*' => FetchResponse::make(201, ['saved' => true], ['X-Fake' => 'yes']),
+    ]);
+
+    $requestId = $fetch->shared('profile-saved')->post('https://example.test/profile');
+
+    expect($fake->events())->toHaveCount(2)
+        ->and($fake->sharedEvents())->toHaveCount(1)
+        ->and($fake->sharedEvents()[0])->toBeInstanceOf(RecordedSharedEvent::class)
+        ->and($fake->sharedEvents()[0]->name)->toBe('profile-saved')
+        ->and($fake->sharedEvents()[0]->payload)->toMatchArray([
+            'requestId' => $requestId,
+            'status' => 'completed',
+            'httpStatus' => 201,
+        ]);
+
+    $fetch->assertShared('profile-saved', fn (array $payload) => $payload['requestId'] === $requestId);
+});
+
+it('records shared download completion payloads', function () {
+    $fetch = new Fetch;
+    $fake = $fetch->fake(['*' => FetchResponse::make(200, 'file')]);
+
+    $fetch->shared('report-ready')->download(
+        'https://example.test/report',
+        '/app/report.pdf',
+    );
+
+    $fetch->assertShared('report-ready', fn (array $payload) => $payload['path'] === '/app/report.pdf'
+        && $payload['bytesReceived'] === 4);
+
+    expect($fake->sharedEvents())->toHaveCount(1);
 });

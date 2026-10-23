@@ -4,6 +4,7 @@ parameters:
         - src/Exceptions
         - src/Facades
         - src/Fetch.php
+        - src/ActiveRequest.php
         - src/FetchResponse.php
         - src/FetchServiceProvider.php
         - src/PendingRequest.php

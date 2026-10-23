@@ -11,6 +11,7 @@ export class PendingRequest {
     this.bodyMode = "json";
     this.rawBody = null;
     this.retryPolicy = null;
+    this.sharedEvent = null;
   }
 
   id() {
@@ -70,6 +71,12 @@ export class PendingRequest {
   }
   retry(options = 3) {
     this.retryPolicy = normalizeRetry(options);
+    return this;
+  }
+  shared(event) {
+    if (typeof event !== "string" || event.trim() === "")
+      throw new TypeError("Fetch shared event name cannot be empty.");
+    this.sharedEvent = event.trim();
     return this;
   }
   attach(name, path, filename = null, mimeType = null) {
@@ -142,6 +149,7 @@ export class PendingRequest {
       timeout: this.timeoutSeconds,
       overwrite: Boolean(overwrite),
       retry: this.retryPolicy ? { ...this.retryPolicy } : null,
+      shared_event: this.sharedEvent,
     }).then(() => this.requestId);
   }
   cancel() {
@@ -157,6 +165,7 @@ export class PendingRequest {
       timeout: this.timeoutSeconds,
       body: this.bodyPayload(method, data),
       retry: this.retryPolicy ? { ...this.retryPolicy } : null,
+      shared_event: this.sharedEvent,
     }).then(() => this.requestId);
   }
   bodyPayload(method, data) {

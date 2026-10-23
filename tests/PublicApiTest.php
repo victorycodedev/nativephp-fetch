@@ -286,6 +286,7 @@ it('exposes every direct manager entry point', function () {
         ->and($manager->acceptJson())->toBeInstanceOf(PendingRequest::class)
         ->and($manager->asJson())->toBeInstanceOf(PendingRequest::class)
         ->and($manager->timeout(1))->toBeInstanceOf(PendingRequest::class)
+        ->and($manager->shared('profile-updated'))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->retry(0))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->attach('file', '/app/file'))->toBeInstanceOf(PendingRequest::class)
         ->and($manager->attachMany([]))->toBeInstanceOf(PendingRequest::class);

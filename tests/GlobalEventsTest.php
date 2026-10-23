@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Container\Container;
 use Native\Mobile\Attributes\On;
 use Native\Mobile\Edge\NativeComponent;
 use Native\Mobile\Events\Concerns\BroadcastsGlobally;
+use Victorycodedev\NativephpFetch\Events\FetchActiveRequestsChanged;
 use Victorycodedev\NativephpFetch\Events\FetchDownloadCompleted;
 use Victorycodedev\NativephpFetch\Events\FetchDownloadProgress;
 use Victorycodedev\NativephpFetch\Events\FetchRequestCancelled;
@@ -11,6 +13,15 @@ use Victorycodedev\NativephpFetch\Events\FetchRequestFailed;
 use Victorycodedev\NativephpFetch\Events\FetchRequestRetrying;
 use Victorycodedev\NativephpFetch\Events\FetchRequestStarted;
 use Victorycodedev\NativephpFetch\Events\FetchUploadProgress;
+
+if (! function_exists('app')) {
+    function app(): Container
+    {
+        static $container;
+
+        return $container ??= new Container;
+    }
+}
 
 if (! function_exists('event')) {
     function event(object $event): object
@@ -38,7 +49,7 @@ it('globally broadcasts only the intentionally selected lifecycle events', funct
         expect(is_subclass_of($event, BroadcastsGlobally::class))->toBeTrue();
     }
 
-    foreach ([FetchRequestCancelled::class, FetchRequestRetrying::class, FetchUploadProgress::class, FetchDownloadProgress::class, FetchDownloadCompleted::class] as $event) {
+    foreach ([FetchRequestCancelled::class, FetchRequestRetrying::class, FetchUploadProgress::class, FetchDownloadProgress::class, FetchDownloadCompleted::class, FetchActiveRequestsChanged::class] as $event) {
         expect(is_subclass_of($event, BroadcastsGlobally::class))->toBeFalse();
     }
 });

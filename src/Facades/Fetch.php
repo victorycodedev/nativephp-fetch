@@ -3,6 +3,7 @@
 namespace Victorycodedev\NativephpFetch\Facades;
 
 use Illuminate\Support\Facades\Facade;
+use Victorycodedev\NativephpFetch\ActiveRequest;
 use Victorycodedev\NativephpFetch\PendingRequest;
 use Victorycodedev\NativephpFetch\Testing\FakeFetch;
 
@@ -13,6 +14,7 @@ use Victorycodedev\NativephpFetch\Testing\FakeFetch;
  * @method static void assertSent(\Closure $callback)
  * @method static void assertNotSent(?\Closure $callback = null)
  * @method static void assertSentCount(int $count)
+ * @method static void assertShared(string $event, ?\Closure $callback = null)
  * @method static void macro(string $name, object|callable $macro)
  * @method static void mixin(object $mixin, bool $replace = true)
  * @method static bool hasMacro(string $name)
@@ -26,6 +28,7 @@ use Victorycodedev\NativephpFetch\Testing\FakeFetch;
  * @method static PendingRequest asForm()
  * @method static PendingRequest withBody(string $body, string $contentType = 'text/plain')
  * @method static PendingRequest timeout(int $seconds)
+ * @method static PendingRequest shared(string $event)
  * @method static PendingRequest retry(int $times = 3, int $delay = 500, float $multiplier = 2.0, ?int $maxDelay = 30000, array $statuses = [])
  * @method static PendingRequest attach(string $name, string $path, ?string $filename = null, ?string $mimeType = null)
  * @method static PendingRequest attachMany(array $attachments)
@@ -36,6 +39,9 @@ use Victorycodedev\NativephpFetch\Testing\FakeFetch;
  * @method static string delete(string $url, array $data = [])
  * @method static string download(string $url, string $destination, array $query = [], bool $overwrite = false)
  * @method static bool cancel(string $requestId)
+ * @method static list<ActiveRequest> active()
+ * @method static bool isActive(string $requestId)
+ * @method static int cancelAll()
  *
  * @see \Victorycodedev\NativephpFetch\Fetch
  */

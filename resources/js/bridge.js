@@ -43,3 +43,14 @@ export async function cancel(id) {
   const response = await bridgeCall("Fetch.Cancel", { request_id: id });
   return Boolean(response?.cancelled);
 }
+export async function active() {
+  const response = await bridgeCall("Fetch.Active");
+  return Array.isArray(response?.requests) ? response.requests : [];
+}
+export async function isActive(id) {
+  return (await active()).some((request) => request?.requestId === id);
+}
+export async function cancelAll() {
+  const response = await bridgeCall("Fetch.CancelAll");
+  return Math.max(0, Number(response?.cancelled) || 0);
+}

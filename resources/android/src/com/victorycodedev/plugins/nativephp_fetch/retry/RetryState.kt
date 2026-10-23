@@ -4,11 +4,21 @@ import androidx.fragment.app.FragmentActivity
 import okhttp3.Call
 import java.util.concurrent.ScheduledFuture
 
-internal class RetryOperation(val requestId: String, val policy: RetryPolicy?) {
+internal class RetryOperation(
+    val requestId: String,
+    val policy: RetryPolicy?,
+    val sharedEvent: String?,
+    val method: String,
+    val url: String,
+) {
     lateinit var activity: FragmentActivity
     var attempt = 0
     var cancelled = false
     var terminal = false
     var call: Call? = null
     var retryFuture: ScheduledFuture<*>? = null
+    var state = "running"
+    var bytesTransferred = 0L
+    var bytesTotal: Long? = null
+    var nextRetryAt: Long? = null
 }

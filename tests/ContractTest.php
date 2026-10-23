@@ -13,6 +13,7 @@ it('keeps the manager and pending request public APIs synchronized', function ()
         'acceptJson',
         'asJson',
         'timeout',
+        'shared',
         'retry',
         'attach',
         'attachMany',
@@ -23,6 +24,9 @@ it('keeps the manager and pending request public APIs synchronized', function ()
         'delete',
         'download',
         'cancel',
+        'active',
+        'isActive',
+        'cancelAll',
     ];
 
     $managerMethods = collect((new ReflectionClass(Fetch::class))->getMethods(
@@ -56,6 +60,7 @@ it('documents every manager API on the facade', function () {
         'acceptJson',
         'asJson',
         'timeout',
+        'shared',
         'retry',
         'attach',
         'attachMany',
@@ -66,6 +71,9 @@ it('documents every manager API on the facade', function () {
         'delete',
         'download',
         'cancel',
+        'active',
+        'isActive',
+        'cancelAll',
     ] as $method) {
         expect($facade)->toContain(" {$method}(");
     }
@@ -137,7 +145,10 @@ it('distinguishes Android call timeouts from explicit cancellation', function ()
     );
 
     expect($android)
-        ->toContain('if (operation.cancelled)')
+        ->toContain(
+            'private fun isRetryCancelled(operation: RetryOperation)',
+            'if (isRetryCancelled(operation))',
+        )
         ->toContain('val cancelled = state.cancelled')
         ->not->toContain('if (call.isCanceled() || operation.cancelled)')
         ->not->toContain('val cancelled = call?.isCanceled() == true || state.cancelled');

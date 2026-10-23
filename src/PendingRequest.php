@@ -25,6 +25,8 @@ class PendingRequest
 
     protected ?array $retry = null;
 
+    protected ?string $sharedEvent = null;
+
     public function __construct(protected ?FakeFetch $fake = null)
     {
         $this->requestId = Uuid::uuid7()->toString();
@@ -135,6 +137,19 @@ class PendingRequest
         }
 
         $this->timeout = $seconds;
+
+        return $this;
+    }
+
+    public function shared(string $event): static
+    {
+        $event = trim($event);
+
+        if ($event === '') {
+            throw new FetchException('Fetch shared event name cannot be empty.');
+        }
+
+        $this->sharedEvent = $event;
 
         return $this;
     }
@@ -374,6 +389,7 @@ class PendingRequest
                 'timeout' => $this->timeout,
                 'overwrite' => $overwrite,
                 'retry' => $this->retry,
+                'shared_event' => $this->sharedEvent,
             ],
         );
 
@@ -409,6 +425,41 @@ class PendingRequest
         return (bool) ($response['cancelled'] ?? false);
     }
 
+    /** @return list<ActiveRequest> */
+    public function active(): array
+    {
+        $response = $this->bridgeCall('Fetch.Active', []);
+
+        if ($this->isErrorResponse($response)) {
+            throw new FetchException(
+                $response['message'] ?? 'Fetch was unable to inspect active requests.'
+            );
+        }
+
+        return array_values(array_map(
+            static fn (array $request): ActiveRequest => ActiveRequest::fromArray($request),
+            array_filter($response['requests'] ?? [], 'is_array'),
+        ));
+    }
+
+    public function isActive(string $requestId): bool
+    {
+        return collect($this->active())->contains(
+            fn (ActiveRequest $request): bool => $request->requestId === $requestId
+        );
+    }
+
+    public function cancelAll(): int
+    {
+        $response = $this->bridgeCall('Fetch.CancelAll', []);
+
+        if ($this->isErrorResponse($response)) {
+            return 0;
+        }
+
+        return max(0, (int) ($response['cancelled'] ?? 0));
+    }
+
     protected function send(
         string $method,
         string $url,
@@ -429,6 +480,7 @@ class PendingRequest
                 data: $data,
             ),
             'retry' => $this->retry,
+            'shared_event' => $this->sharedEvent,
         ];
 
         $response = $this->bridgeCall(

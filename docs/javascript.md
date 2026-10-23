@@ -56,6 +56,18 @@ await request.post(url, data);
 await Fetch.cancel(requestId);
 ```
 
+## Shared events
+
+Use `shared()` when the terminal result should reach whichever screen is active
+after navigation:
+
+```javascript
+const requestId = await Fetch.shared('profile-saved').post(url, data);
+```
+
+The named event has the same completed, failed, and cancelled payload described
+in the [shared events guide](/shared-events).
+
 ## Downloads
 
 ```javascript
@@ -64,6 +76,16 @@ const requestId = await Fetch.download(url, destination, {
   overwrite: false,
 });
 ```
+
+## Active requests
+
+```javascript
+const requests = await Fetch.active();
+const running = await Fetch.isActive(requestId);
+const cancelled = await Fetch.cancelAll();
+```
+
+See [Active requests](/active-requests) for snapshot fields and lifecycle semantics.
 
 ## Multiple attachments
 

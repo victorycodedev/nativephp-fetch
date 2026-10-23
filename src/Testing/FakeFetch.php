@@ -20,6 +20,9 @@ final class FakeFetch
     /** @var list<object> */
     private array $events = [];
 
+    /** @var list<RecordedSharedEvent> */
+    private array $sharedEvents = [];
+
     public function __construct(array $responses = [])
     {
         $this->responses = $responses;
@@ -30,6 +33,14 @@ final class FakeFetch
         if ($bridge === 'Fetch.Cancel') {
             // Fake responses complete synchronously, so no operation remains active.
             return ['status' => 'success', 'cancelled' => false];
+        }
+
+        if ($bridge === 'Fetch.Active') {
+            return ['status' => 'success', 'requests' => []];
+        }
+
+        if ($bridge === 'Fetch.CancelAll') {
+            return ['status' => 'success', 'cancelled' => 0];
         }
 
         $request = new RecordedRequest($bridge, $payload);
@@ -45,6 +56,15 @@ final class FakeFetch
                 (string) ($payload['destination'] ?? ''),
                 strlen($response->body()),
             ));
+
+            $this->recordSharedEvent($payload, [
+                'requestId' => $request->requestId(),
+                'status' => 'completed',
+                'httpStatus' => $response->status(),
+                'headers' => $response->headers(),
+                'path' => (string) ($payload['destination'] ?? ''),
+                'bytesReceived' => strlen($response->body()),
+            ]);
         } else {
             $this->recordEvent(new FetchRequestCompleted(
                 $response->requestId(),
@@ -52,6 +72,14 @@ final class FakeFetch
                 $response->headers(),
                 $response->body(),
             ));
+
+            $this->recordSharedEvent($payload, [
+                'requestId' => $response->requestId(),
+                'status' => 'completed',
+                'httpStatus' => $response->status(),
+                'headers' => $response->headers(),
+                'body' => $response->body(),
+            ]);
         }
 
         return ['status' => 'success', 'accepted' => true];
@@ -89,6 +117,23 @@ final class FakeFetch
         return $this->events;
     }
 
+    public function sharedEvents(): array
+    {
+        return $this->sharedEvents;
+    }
+
+    public function assertShared(string $event, ?Closure $callback = null): void
+    {
+        $matched = collect($this->sharedEvents)->contains(
+            fn (RecordedSharedEvent $recorded) => $recorded->name === $event
+                && ($callback === null || $callback($recorded->payload) === true)
+        );
+
+        if (! $matched) {
+            throw new \RuntimeException("The expected shared Fetch event [{$event}] was not recorded.");
+        }
+    }
+
     private function responseFor(RecordedRequest $request): FetchResponse
     {
         foreach ($this->responses as $pattern => $response) {
@@ -110,5 +155,14 @@ final class FakeFetch
     private function recordEvent(object $event): void
     {
         $this->events[] = $event;
+    }
+
+    private function recordSharedEvent(array $requestPayload, array $eventPayload): void
+    {
+        $name = $requestPayload['shared_event'] ?? null;
+
+        if (is_string($name) && $name !== '') {
+            $this->sharedEvents[] = new RecordedSharedEvent($name, $eventPayload);
+        }
     }
 }

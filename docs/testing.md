@@ -26,6 +26,16 @@ Fetch::assertSentCount(1);
 Fetch::restore();
 ```
 
+Requests using `shared()` can be asserted by event name and payload:
+
+```php
+Fetch::shared('profile-saved')->post($url, $data);
+
+Fetch::assertShared('profile-saved', fn (array $payload) =>
+    $payload['status'] === 'completed'
+);
+```
+
 Wildcards use Laravel's `Str::is` matching. A closure can calculate a response
 from the recorded request:
 
@@ -41,6 +51,10 @@ The fake records events for deterministic assertions through
 `Fetch::fakeInstance()->events()`. It does not dispatch through Laravel's global
 event dispatcher because production global dispatch occurs when an event
 arrives through NativePHP's event bridge.
+
+Named shared events are kept separately in
+`Fetch::fakeInstance()->sharedEvents()` so existing typed-event counts remain
+backward compatible.
 
 `isFaking()` returns whether a fake is currently active. `assertNotSent()` fails
 when any recorded request matches the given closure (or when any request was

@@ -45,6 +45,10 @@ private object FetchClient {
 
     private val retryOperations = ConcurrentHashMap<String, RetryOperation>()
 
+    private val announcedActiveRequests = ConcurrentHashMap.newKeySet<String>()
+
+    private val activeProgressTimes = ConcurrentHashMap<String, Long>()
+
     private val retryScheduler = Executors.newSingleThreadScheduledExecutor()
 
     fun start(
@@ -57,6 +61,7 @@ private object FetchClient {
         body: Map<String, Any>?,
         timeoutSeconds: Long,
         retryPolicy: RetryPolicy?,
+        sharedEvent: String?,
     ) {
         val parsedUrl = url.toHttpUrlOrNull()
             ?: run {
@@ -65,6 +70,7 @@ private object FetchClient {
                     requestId = requestId,
                     message = "The supplied URL is invalid.",
                     code = "invalid_url",
+                    sharedEvent = sharedEvent,
                 )
                 return
             }
@@ -103,6 +109,7 @@ private object FetchClient {
             activity = activity,
             requestId = requestId,
             body = body,
+            sharedEvent = sharedEvent,
         )
 
         if (bodyResult.failed) {
@@ -143,6 +150,7 @@ private object FetchClient {
                     requestId = requestId,
                     message = "HTTP method $method is not supported.",
                     code = "unsupported_method",
+                    sharedEvent = sharedEvent,
                 )
                 return
             }
@@ -157,16 +165,21 @@ private object FetchClient {
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
 
+        val operation = RetryOperation(
+            requestId,
+            retryPolicy,
+            sharedEvent,
+            request.method,
+            request.url.toString(),
+        )
+        operation.activity = activity
+        retryOperations[requestId] = operation
         emitStarted(
             activity = activity,
             requestId = requestId,
             method = method.uppercase(),
             url = request.url.toString(),
         )
-
-        val operation = RetryOperation(requestId, retryPolicy)
-        operation.activity = activity
-        retryOperations[requestId] = operation
         enqueueStandardAttempt(activity, operation, timedClient, request)
     }
 
@@ -176,9 +189,20 @@ private object FetchClient {
         client: OkHttpClient,
         request: Request,
     ) {
-        synchronized(operation) {
+        val resumed = synchronized(operation) {
             if (operation.cancelled || operation.terminal) return
+            val isRetry = operation.attempt > 0
             operation.attempt++
+            operation.state = "running"
+            operation.nextRetryAt = null
+            operation.bytesTransferred = 0L
+            operation.bytesTotal = null
+            operation.retryFuture = null
+            isRetry
+        }
+
+        if (resumed) {
+            emitActiveRequestsChanged(activity, operation.requestId, "running")
         }
 
         val call = client.newCall(request)
@@ -189,7 +213,7 @@ private object FetchClient {
             override fun onFailure(call: Call, exception: IOException) {
                 // OkHttp also marks a call as canceled when its call timeout fires.
                 // Only our logical flag proves that Fetch.Cancel was requested.
-                if (operation.cancelled) {
+                if (isRetryCancelled(operation)) {
                     finishRetryCancelled(activity, operation)
                     return
                 }
@@ -210,7 +234,7 @@ private object FetchClient {
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    if (operation.cancelled) {
+                    if (isRetryCancelled(operation)) {
                         finishRetryCancelled(activity, operation)
                         return
                     }
@@ -254,6 +278,19 @@ private object FetchClient {
                         put("body", response.body?.string().orEmpty())
                     }
                     NativeEventDispatcher.dispatch(activity, FetchEvents.COMPLETED, payload)
+                    emitSharedCompleted(
+                        activity = activity,
+                        sharedEvent = operation.sharedEvent,
+                        requestId = operation.requestId,
+                        httpStatus = response.code,
+                        headers = responseHeaders,
+                        body = payload.getString("body"),
+                    )
+                    emitActiveRequestsChanged(
+                        activity,
+                        operation.requestId,
+                        "finished",
+                    )
                 }
             }
         })
@@ -270,6 +307,7 @@ private object FetchClient {
         timeoutSeconds: Long,
         overwrite: Boolean,
         retryPolicy: RetryPolicy?,
+        sharedEvent: String?,
     ) {
         val parsedUrl = url.toHttpUrlOrNull()
             ?: throw DownloadStartException(
@@ -396,6 +434,8 @@ private object FetchClient {
             partial = partial,
             overwrite = overwrite,
             policy = retryPolicy,
+            sharedEvent = sharedEvent,
+            url = request.url.toString(),
         )
 
         state.attempt = 1
@@ -579,6 +619,7 @@ private object FetchClient {
                             response,
                             destination.path,
                             bytesReceived,
+                            state.sharedEvent,
                         )
                     }
                 } catch (exception: Exception) {
@@ -625,6 +666,8 @@ private object FetchClient {
             state.partial.delete()
             val value = retryDelay(policy, state.attempt, retryAfter)
             state.attempt++
+            state.state = "waiting_retry"
+            state.nextRetryAt = System.currentTimeMillis() + value
             value to policy.maxAttempts
         }
 
@@ -643,13 +686,65 @@ private object FetchClient {
             synchronized(state) {
                 if (state.cancelled || state.terminal) return@schedule
                 state.partial.delete()
+                state.state = "running"
+                state.nextRetryAt = null
+                state.bytesTransferred = 0L
+                state.bytesTotal = null
+                state.retryFuture = null
                 val call = client.newCall(request)
                 state.call = call
                 calls[state.requestId] = call
+                emitActiveRequestsChanged(activity, state.requestId, "running")
                 call.enqueue(callback)
             }
         }, delay.toLong(), TimeUnit.MILLISECONDS)
         return true
+    }
+
+    fun activeRequests(): List<Map<String, Any>> {
+        val requests = retryOperations.values.mapNotNull { operation ->
+            synchronized(operation) {
+                if (operation.terminal || operation.cancelled) null else mapOf<String, Any>(
+                    "requestId" to operation.requestId,
+                    "method" to operation.method,
+                    "url" to operation.url,
+                    "type" to "request",
+                    "attempt" to operation.attempt.coerceAtLeast(1),
+                    "state" to operation.state,
+                    "bytesTransferred" to operation.bytesTransferred,
+                    "bytesTotal" to (operation.bytesTotal ?: JSONObject.NULL),
+                    "progress" to progressValue(
+                        operation.bytesTransferred,
+                        operation.bytesTotal,
+                    ),
+                    "nextRetryAt" to (operation.nextRetryAt ?: JSONObject.NULL),
+                )
+            }
+        }.toMutableList()
+
+        downloads.values.mapNotNullTo(requests) { state ->
+            synchronized(state) {
+                if (state.terminal || state.cancelled) null else mapOf<String, Any>(
+                    "requestId" to state.requestId,
+                    "method" to "GET",
+                    "url" to state.url,
+                    "type" to "download",
+                    "attempt" to state.attempt.coerceAtLeast(1),
+                    "state" to state.state,
+                    "bytesTransferred" to state.bytesTransferred,
+                    "bytesTotal" to (state.bytesTotal ?: JSONObject.NULL),
+                    "progress" to progressValue(state.bytesTransferred, state.bytesTotal),
+                    "nextRetryAt" to (state.nextRetryAt ?: JSONObject.NULL),
+                )
+            }
+        }
+
+        return requests.sortedBy { it["requestId"].toString() }
+    }
+
+    fun cancelAll(): Int {
+        val requestIds = (retryOperations.keys + downloads.keys).distinct()
+        return requestIds.count(::cancel)
     }
 
     fun cancel(requestId: String): Boolean {
@@ -776,13 +871,14 @@ private object FetchClient {
         cleanupDownload(call, state, removePartial = true)
 
         if (cancelled || state.cancelled) {
-            emitCancelled(activity, state.requestId)
+            emitCancelled(activity, state.requestId, state.sharedEvent)
         } else {
             emitFailure(
                 activity,
                 state.requestId,
                 failureMessage,
                 failureCode,
+                state.sharedEvent,
             )
         }
     }
@@ -792,6 +888,10 @@ private object FetchClient {
         state: DownloadState,
         removePartial: Boolean,
     ) {
+        state.retryFuture?.cancel(false)
+        state.retryFuture = null
+        state.call = null
+
         if (call != null) {
             calls.remove(state.requestId, call)
         } else {
@@ -809,6 +909,7 @@ private object FetchClient {
         activity: FragmentActivity,
         requestId: String,
         body: Map<String, Any>?,
+        sharedEvent: String?,
     ): BodyBuildResult {
         if (body == null) {
             return BodyBuildResult()
@@ -847,6 +948,7 @@ private object FetchClient {
                     activity = activity,
                     requestId = requestId,
                     body = body,
+                    sharedEvent = sharedEvent,
                 )
             }
             else -> BodyBuildResult()
@@ -857,6 +959,7 @@ private object FetchClient {
         activity: FragmentActivity,
         requestId: String,
         body: Map<String, Any>,
+        sharedEvent: String?,
     ): BodyBuildResult {
         val builder = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
@@ -882,6 +985,7 @@ private object FetchClient {
                         requestId,
                         "Multipart file is missing its field name.",
                         "invalid_file",
+                        sharedEvent,
                     )
 
             val path =
@@ -891,6 +995,7 @@ private object FetchClient {
                         requestId,
                         "Multipart file is missing its path.",
                         "invalid_file",
+                        sharedEvent,
                     )
 
             val filename =
@@ -909,6 +1014,7 @@ private object FetchClient {
                     requestId,
                     "Upload file does not exist or is not readable: $path",
                     "file_not_found",
+                    sharedEvent,
                 )
             }
 
@@ -944,12 +1050,14 @@ private object FetchClient {
         requestId: String,
         message: String,
         code: String,
+        sharedEvent: String?,
     ): BodyBuildResult {
         emitFailure(
             activity = activity,
             requestId = requestId,
             message = message,
             code = code,
+            sharedEvent = sharedEvent,
         )
 
         return BodyBuildResult(
@@ -974,6 +1082,8 @@ private object FetchClient {
             eventClass = FetchEvents.STARTED,
             payload = payload,
         )
+        announcedActiveRequests.add(requestId)
+        emitActiveRequestsChanged(activity, requestId, "started")
     }
 
     private fun emitFailure(
@@ -981,6 +1091,7 @@ private object FetchClient {
         requestId: String,
         message: String,
         code: String?,
+        sharedEvent: String? = null,
     ) {
         val payload = JSONObject().apply {
             put("requestId", requestId)
@@ -995,11 +1106,15 @@ private object FetchClient {
             eventClass = FetchEvents.FAILED,
             payload = payload,
         )
+
+        emitSharedTerminal(activity, sharedEvent, "failed", payload)
+        emitActiveRequestsChanged(activity, requestId, "finished")
     }
 
     private fun emitCancelled(
         activity: FragmentActivity,
         requestId: String,
+        sharedEvent: String? = null,
     ) {
         val payload = JSONObject().apply {
             put("requestId", requestId)
@@ -1010,6 +1125,9 @@ private object FetchClient {
             eventClass = FetchEvents.CANCELLED,
             payload = payload,
         )
+
+        emitSharedTerminal(activity, sharedEvent, "cancelled", payload)
+        emitActiveRequestsChanged(activity, requestId, "finished")
     }
 
     private fun emitUploadProgress(
@@ -1031,6 +1149,13 @@ private object FetchClient {
             0.0
         }
 
+        retryOperations[requestId]?.let { operation ->
+            synchronized(operation) {
+                operation.bytesTransferred = safeSent
+                operation.bytesTotal = safeTotal.takeIf { it > 0L }
+            }
+        }
+
         val payload = JSONObject().apply {
             put("requestId", requestId)
             put("bytesSent", safeSent)
@@ -1043,6 +1168,7 @@ private object FetchClient {
             eventClass = FetchEvents.UPLOAD_PROGRESS,
             payload = payload,
         )
+        emitActiveRequestsChanged(activity, requestId, "progress", throttle = true)
     }
 
     private fun emitDownloadProgress(
@@ -1062,6 +1188,13 @@ private object FetchClient {
             else -> null
         }
 
+        downloads[requestId]?.let { state ->
+            synchronized(state) {
+                state.bytesTransferred = safeReceived
+                state.bytesTotal = bytesTotal
+            }
+        }
+
         val payload = JSONObject().apply {
             put("requestId", requestId)
             put("bytesReceived", safeReceived)
@@ -1070,6 +1203,7 @@ private object FetchClient {
         }
 
         NativeEventDispatcher.dispatch(activity, FetchEvents.DOWNLOAD_PROGRESS, payload)
+        emitActiveRequestsChanged(activity, requestId, "progress", throttle = true)
     }
 
     private fun emitDownloadCompleted(
@@ -1079,6 +1213,7 @@ private object FetchClient {
         response: Response,
         path: String,
         bytesReceived: Long,
+        sharedEvent: String?,
     ) {
         val responseHeaders = JSONObject()
         response.headers.names().forEach { name ->
@@ -1099,6 +1234,55 @@ private object FetchClient {
         }
 
         NativeEventDispatcher.dispatch(activity, FetchEvents.DOWNLOAD_COMPLETED, payload)
+        emitSharedCompleted(
+            activity = activity,
+            sharedEvent = sharedEvent,
+            requestId = requestId,
+            httpStatus = status,
+            headers = responseHeaders,
+            path = path,
+            bytesReceived = bytesReceived,
+        )
+        emitActiveRequestsChanged(activity, requestId, "finished")
+    }
+
+    private fun emitSharedCompleted(
+        activity: FragmentActivity,
+        sharedEvent: String?,
+        requestId: String,
+        httpStatus: Int,
+        headers: JSONObject,
+        body: String? = null,
+        path: String? = null,
+        bytesReceived: Long? = null,
+    ) {
+        val payload = JSONObject().apply {
+            put("requestId", requestId)
+            put("status", "completed")
+            put("httpStatus", httpStatus)
+            put("headers", headers)
+            body?.let { put("body", it) }
+            path?.let { put("path", it) }
+            bytesReceived?.let { put("bytesReceived", it) }
+        }
+
+        emitSharedTerminal(activity, sharedEvent, "completed", payload)
+    }
+
+    private fun emitSharedTerminal(
+        activity: FragmentActivity,
+        sharedEvent: String?,
+        status: String,
+        source: JSONObject,
+    ) {
+        val event = sharedEvent?.takeIf { it.isNotBlank() } ?: return
+        val payload = JSONObject(source.toString()).apply {
+            put("status", status)
+            if (status == "failed" && !has("code")) {
+                put("code", JSONObject.NULL)
+            }
+        }
+        NativeEventDispatcher.dispatch(activity, event, payload)
     }
 
     private fun scheduleRetry(
@@ -1115,7 +1299,10 @@ private object FetchClient {
                 operation.attempt >= policy.maxAttempts
             ) return false
 
-            retryDelay(policy, operation.attempt, retryAfter)
+            retryDelay(policy, operation.attempt, retryAfter).also {
+                operation.state = "waiting_retry"
+                operation.nextRetryAt = System.currentTimeMillis() + it
+            }
         }
 
         emitRetrying(
@@ -1137,6 +1324,13 @@ private object FetchClient {
         return true
     }
 
+    private fun progressValue(bytesTransferred: Long, bytesTotal: Long?): Any =
+        if (bytesTotal != null && bytesTotal > 0L) {
+            (bytesTransferred.toDouble() / bytesTotal.toDouble()).coerceIn(0.0, 1.0)
+        } else {
+            JSONObject.NULL
+        }
+
     private fun isRetryableNetwork(code: String): Boolean = code in setOf(
         "timeout",
         "offline",
@@ -1154,6 +1348,11 @@ private object FetchClient {
             }
         }
 
+    private fun isRetryCancelled(operation: RetryOperation): Boolean =
+        synchronized(operation) {
+            operation.cancelled
+        }
+
     private fun finishRetryFailure(
         activity: FragmentActivity,
         operation: RetryOperation,
@@ -1161,9 +1360,12 @@ private object FetchClient {
         code: String,
     ) {
         if (!markRetryTerminal(operation)) return
+        operation.retryFuture?.cancel(false)
+        operation.retryFuture = null
+        operation.call = null
         calls.remove(operation.requestId)
         retryOperations.remove(operation.requestId, operation)
-        emitFailure(activity, operation.requestId, message, code)
+        emitFailure(activity, operation.requestId, message, code, operation.sharedEvent)
     }
 
     private fun finishRetryCancelled(
@@ -1175,10 +1377,12 @@ private object FetchClient {
             operation.cancelled = true
             operation.terminal = true
             operation.retryFuture?.cancel(false)
+            operation.retryFuture = null
+            operation.call = null
         }
         calls.remove(operation.requestId)
         retryOperations.remove(operation.requestId, operation)
-        emitCancelled(activity, operation.requestId)
+        emitCancelled(activity, operation.requestId, operation.sharedEvent)
     }
 
     private fun emitRetrying(
@@ -1199,6 +1403,45 @@ private object FetchClient {
             put("status", status ?: JSONObject.NULL)
         }
         NativeEventDispatcher.dispatch(activity, FetchEvents.RETRYING, payload)
+        emitActiveRequestsChanged(activity, requestId, "waiting_retry")
+    }
+
+    private fun emitActiveRequestsChanged(
+        activity: FragmentActivity,
+        requestId: String,
+        change: String,
+        throttle: Boolean = false,
+    ) {
+        if (change == "finished") {
+            if (!announcedActiveRequests.remove(requestId)) return
+            activeProgressTimes.remove(requestId)
+        } else if (!announcedActiveRequests.contains(requestId) && change != "started") {
+            return
+        }
+
+        if (throttle) {
+            val now = System.currentTimeMillis()
+            var shouldEmit = false
+            activeProgressTimes.compute(requestId) { _, previous ->
+                if (previous == null || now - previous >= 250L) {
+                    shouldEmit = true
+                    now
+                } else {
+                    previous
+                }
+            }
+            if (!shouldEmit) return
+        }
+
+        val payload = JSONObject().apply {
+            put("requestId", requestId)
+            put("change", change)
+        }
+        NativeEventDispatcher.dispatch(
+            activity,
+            FetchEvents.ACTIVE_REQUESTS_CHANGED,
+            payload,
+        )
     }
 
     private fun failureCode(
@@ -1279,6 +1522,8 @@ object FetchFunctions {
 
             val body = bridgeMap(parameters["body"])
             val retryPolicy = bridgeRetryPolicy(parameters["retry"])
+            val sharedEvent = (parameters["shared_event"] as? String)
+                ?.takeIf { it.isNotBlank() }
 
             return try {
                 FetchClient.start(
@@ -1291,6 +1536,7 @@ object FetchFunctions {
                     body = body,
                     timeoutSeconds = timeout,
                     retryPolicy = retryPolicy,
+                    sharedEvent = sharedEvent,
                 )
 
                 BridgeResponse.success(
@@ -1335,6 +1581,28 @@ object FetchFunctions {
         }
     }
 
+    class Active(
+        private val context: Context,
+    ) : BridgeFunction {
+
+        override fun execute(
+            parameters: Map<String, Any>,
+        ): Map<String, Any> = BridgeResponse.success(
+            mapOf("requests" to FetchClient.activeRequests())
+        )
+    }
+
+    class CancelAll(
+        private val context: Context,
+    ) : BridgeFunction {
+
+        override fun execute(
+            parameters: Map<String, Any>,
+        ): Map<String, Any> = BridgeResponse.success(
+            mapOf("cancelled" to FetchClient.cancelAll())
+        )
+    }
+
     class Download(
         private val activity: FragmentActivity,
     ) : BridgeFunction {
@@ -1363,6 +1631,8 @@ object FetchFunctions {
             val headers = rawHeaders.mapValues { (_, value) -> value.toString() }
             val query = bridgeMap(parameters["query"]) ?: emptyMap()
             val retryPolicy = bridgeRetryPolicy(parameters["retry"])
+            val sharedEvent = (parameters["shared_event"] as? String)
+                ?.takeIf { it.isNotBlank() }
 
             return try {
                 FetchClient.download(
@@ -1375,6 +1645,7 @@ object FetchFunctions {
                     timeout,
                     overwrite,
                     retryPolicy,
+                    sharedEvent,
                 )
 
                 BridgeResponse.success(
