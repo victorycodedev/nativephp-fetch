@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Container\Container;
 use Native\Mobile\Attributes\On;
 use Native\Mobile\Edge\NativeComponent;
 use Native\Mobile\Events\Concerns\BroadcastsGlobally;
@@ -12,6 +13,15 @@ use Victorycodedev\NativephpFetch\Events\FetchRequestFailed;
 use Victorycodedev\NativephpFetch\Events\FetchRequestRetrying;
 use Victorycodedev\NativephpFetch\Events\FetchRequestStarted;
 use Victorycodedev\NativephpFetch\Events\FetchUploadProgress;
+
+if (! function_exists('app')) {
+    function app(): Container
+    {
+        static $container;
+
+        return $container ??= new Container;
+    }
+}
 
 if (! function_exists('event')) {
     function event(object $event): object
