@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added opt-in named terminal events for delivering request, upload, and download results to the active NativePHP screen.
 - Added active-request snapshots, per-request activity checks, and bulk cancellation for native operations.
 - Added live transfer progress and retry-waiting state to active-request snapshots.
+- Added throttled `FetchActiveRequestsChanged` component events for reactive activity screens.
 - Added a version-organized What's New documentation page with quick examples and links to full guides.
 
 ### Changed

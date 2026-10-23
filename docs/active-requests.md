@@ -30,6 +30,20 @@ Ordinary requests generally have `null` progress because their response body is 
 ## Activity-screen example
 
 ```php
+use Native\Mobile\Attributes\On;
+use Victorycodedev\NativephpFetch\Events\FetchActiveRequestsChanged;
+
+public function mount(): void
+{
+    $this->refreshTransfers();
+}
+
+#[On(FetchActiveRequestsChanged::class)]
+public function activeRequestsChanged(string $requestId, string $change): void
+{
+    $this->refreshTransfers();
+}
+
 public function refreshTransfers(): void
 {
     $this->transfers = array_map(
@@ -44,7 +58,9 @@ public function refreshTransfers(): void
 }
 ```
 
-Call `refreshTransfers()` when the screen opens, after progress or retry events, or from an explicit refresh action. `active()` returns a point-in-time snapshot; it does not continuously mutate PHP state.
+Call `refreshTransfers()` when the screen opens so work started on another screen appears immediately. `FetchActiveRequestsChanged` then refreshes the active screen when an operation starts, progresses, enters or leaves retry waiting, or finishes.
+
+The event contains `requestId` and `change`. The change is `started`, `progress`, `waiting_retry`, `running`, or `finished`. Progress notifications are throttled natively to at most one every 250 milliseconds per request, while lifecycle changes are immediate. `active()` still returns a point-in-time snapshot; it does not continuously mutate PHP state.
 
 ## Check one request
 

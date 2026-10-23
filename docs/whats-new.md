@@ -38,6 +38,20 @@ foreach (Fetch::active() as $request) {
 
 See [Active requests](/active-requests) for all snapshot fields and lifecycle semantics.
 
+### Reactive activity screens
+
+Refresh an activity screen without polling continuously:
+
+```php
+#[On(FetchActiveRequestsChanged::class)]
+public function refreshActivity(): void
+{
+    $this->requests = Fetch::active();
+}
+```
+
+The event covers starts, throttled progress, retry state changes, and terminal removal. See [Active requests](/active-requests) for the complete example.
+
 ## 1.1.0
 
 Version 1.1 added reusable macros, request-local base URLs, common `FetchResponse` status helpers, and application-wide Laravel delivery for the existing started, completed, and failed events.

@@ -86,9 +86,12 @@ to `FetchRequestFailed` without first dispatching `FetchRequestStarted`.
 | `FetchUploadProgress` | `requestId`, `bytesSent`, `bytesTotal`, `progress` |
 | `FetchDownloadProgress` | `requestId`, `bytesReceived`, nullable `bytesTotal`, nullable `progress` |
 | `FetchDownloadCompleted` | `requestId`, `status`, `headers`, `path`, `bytesReceived` |
+| `FetchActiveRequestsChanged` | `requestId`, `change` |
 
 Only `FetchRequestStarted`, `FetchRequestCompleted`, and `FetchRequestFailed`
 are globally observable. The other events in the table remain component-only.
+`FetchActiveRequestsChanged` is a lightweight invalidation signal for refreshing
+`Fetch::active()`; its progress notifications are throttled to 250 milliseconds.
 
 ## Terminal events
 

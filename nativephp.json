@@ -95,7 +95,8 @@
         "Victorycodedev\\NativephpFetch\\Events\\FetchUploadProgress",
         "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying",
         "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress",
-        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
+        "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted",
+        "Victorycodedev\\NativephpFetch\\Events\\FetchActiveRequestsChanged"
     ],
     "service_provider": "Victorycodedev\\NativephpFetch\\FetchServiceProvider",
     "hooks": {

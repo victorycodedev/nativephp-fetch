@@ -1,6 +1,7 @@
 <?php
 
 use Victorycodedev\NativephpFetch\ActiveRequest;
+use Victorycodedev\NativephpFetch\Events\FetchActiveRequestsChanged;
 use Victorycodedev\NativephpFetch\Fetch;
 use Victorycodedev\NativephpFetch\PendingRequest;
 
@@ -103,4 +104,25 @@ it('keeps live state and progress tracking aligned on both platforms', function 
         expect($android)->toContain($field)
             ->and($ios)->toContain($field);
     }
+});
+
+it('exposes reactive active request changes as a component event', function () {
+    $event = new FetchActiveRequestsChanged('request-1', 'waiting_retry');
+    $root = dirname(__DIR__);
+    $android = file_get_contents($root.'/resources/android/src/FetchFunctions.kt');
+    $ios = file_get_contents($root.'/resources/ios/Sources/FetchFunctions.swift');
+
+    expect($event->requestId)->toBe('request-1')
+        ->and($event->change)->toBe('waiting_retry')
+        ->and($android)->toContain('ACTIVE_REQUESTS_CHANGED', '250L')
+        ->and($ios)->toContain('activeRequestsChanged', '0.25');
+
+    foreach (['started', 'progress', 'waiting_retry', 'running', 'finished'] as $change) {
+        expect($android)->toContain("\"{$change}\"")
+            ->and($ios)->toContain("\"{$change}\"");
+    }
+
+    expect($android)
+        ->toContain('activeProgressTimes.compute(requestId)')
+        ->not->toContain('activeProgressTimes.put(requestId, now)');
 });

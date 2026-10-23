@@ -45,6 +45,10 @@ private object FetchClient {
 
     private val retryOperations = ConcurrentHashMap<String, RetryOperation>()
 
+    private val announcedActiveRequests = ConcurrentHashMap.newKeySet<String>()
+
+    private val activeProgressTimes = ConcurrentHashMap<String, Long>()
+
     private val retryScheduler = Executors.newSingleThreadScheduledExecutor()
 
     fun start(
@@ -161,13 +165,6 @@ private object FetchClient {
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .build()
 
-        emitStarted(
-            activity = activity,
-            requestId = requestId,
-            method = method.uppercase(),
-            url = request.url.toString(),
-        )
-
         val operation = RetryOperation(
             requestId,
             retryPolicy,
@@ -177,6 +174,12 @@ private object FetchClient {
         )
         operation.activity = activity
         retryOperations[requestId] = operation
+        emitStarted(
+            activity = activity,
+            requestId = requestId,
+            method = method.uppercase(),
+            url = request.url.toString(),
+        )
         enqueueStandardAttempt(activity, operation, timedClient, request)
     }
 
@@ -186,12 +189,18 @@ private object FetchClient {
         client: OkHttpClient,
         request: Request,
     ) {
-        synchronized(operation) {
+        val resumed = synchronized(operation) {
             if (operation.cancelled || operation.terminal) return
+            val isRetry = operation.attempt > 0
             operation.attempt++
             operation.state = "running"
             operation.nextRetryAt = null
             operation.bytesTransferred = 0L
+            isRetry
+        }
+
+        if (resumed) {
+            emitActiveRequestsChanged(activity, operation.requestId, "running")
         }
 
         val call = client.newCall(request)
@@ -274,6 +283,11 @@ private object FetchClient {
                         httpStatus = response.code,
                         headers = responseHeaders,
                         body = payload.getString("body"),
+                    )
+                    emitActiveRequestsChanged(
+                        activity,
+                        operation.requestId,
+                        "finished",
                     )
                 }
             }
@@ -677,6 +691,7 @@ private object FetchClient {
                 val call = client.newCall(request)
                 state.call = call
                 calls[state.requestId] = call
+                emitActiveRequestsChanged(activity, state.requestId, "running")
                 call.enqueue(callback)
             }
         }, delay.toLong(), TimeUnit.MILLISECONDS)
@@ -1060,6 +1075,8 @@ private object FetchClient {
             eventClass = FetchEvents.STARTED,
             payload = payload,
         )
+        announcedActiveRequests.add(requestId)
+        emitActiveRequestsChanged(activity, requestId, "started")
     }
 
     private fun emitFailure(
@@ -1084,6 +1101,7 @@ private object FetchClient {
         )
 
         emitSharedTerminal(activity, sharedEvent, "failed", payload)
+        emitActiveRequestsChanged(activity, requestId, "finished")
     }
 
     private fun emitCancelled(
@@ -1102,6 +1120,7 @@ private object FetchClient {
         )
 
         emitSharedTerminal(activity, sharedEvent, "cancelled", payload)
+        emitActiveRequestsChanged(activity, requestId, "finished")
     }
 
     private fun emitUploadProgress(
@@ -1142,6 +1161,7 @@ private object FetchClient {
             eventClass = FetchEvents.UPLOAD_PROGRESS,
             payload = payload,
         )
+        emitActiveRequestsChanged(activity, requestId, "progress", throttle = true)
     }
 
     private fun emitDownloadProgress(
@@ -1176,6 +1196,7 @@ private object FetchClient {
         }
 
         NativeEventDispatcher.dispatch(activity, FetchEvents.DOWNLOAD_PROGRESS, payload)
+        emitActiveRequestsChanged(activity, requestId, "progress", throttle = true)
     }
 
     private fun emitDownloadCompleted(
@@ -1215,6 +1236,7 @@ private object FetchClient {
             path = path,
             bytesReceived = bytesReceived,
         )
+        emitActiveRequestsChanged(activity, requestId, "finished")
     }
 
     private fun emitSharedCompleted(
@@ -1364,6 +1386,45 @@ private object FetchClient {
             put("status", status ?: JSONObject.NULL)
         }
         NativeEventDispatcher.dispatch(activity, FetchEvents.RETRYING, payload)
+        emitActiveRequestsChanged(activity, requestId, "waiting_retry")
+    }
+
+    private fun emitActiveRequestsChanged(
+        activity: FragmentActivity,
+        requestId: String,
+        change: String,
+        throttle: Boolean = false,
+    ) {
+        if (change == "finished") {
+            if (!announcedActiveRequests.remove(requestId)) return
+            activeProgressTimes.remove(requestId)
+        } else if (!announcedActiveRequests.contains(requestId) && change != "started") {
+            return
+        }
+
+        if (throttle) {
+            val now = System.currentTimeMillis()
+            var shouldEmit = false
+            activeProgressTimes.compute(requestId) { _, previous ->
+                if (previous == null || now - previous >= 250L) {
+                    shouldEmit = true
+                    now
+                } else {
+                    previous
+                }
+            }
+            if (!shouldEmit) return
+        }
+
+        val payload = JSONObject().apply {
+            put("requestId", requestId)
+            put("change", change)
+        }
+        NativeEventDispatcher.dispatch(
+            activity,
+            FetchEvents.ACTIVE_REQUESTS_CHANGED,
+            payload,
+        )
     }
 
     private fun failureCode(

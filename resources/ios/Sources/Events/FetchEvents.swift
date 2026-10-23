@@ -9,4 +9,5 @@ enum FetchEvents {
     static let downloadProgress = "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress"
     static let downloadCompleted = "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
     static let retrying = "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
+    static let activeRequestsChanged = "Victorycodedev\\NativephpFetch\\Events\\FetchActiveRequestsChanged"
 }

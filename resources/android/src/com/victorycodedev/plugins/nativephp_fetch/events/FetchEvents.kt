@@ -9,4 +9,5 @@ internal object FetchEvents {
     const val DOWNLOAD_PROGRESS = "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadProgress"
     const val DOWNLOAD_COMPLETED = "Victorycodedev\\NativephpFetch\\Events\\FetchDownloadCompleted"
     const val RETRYING = "Victorycodedev\\NativephpFetch\\Events\\FetchRequestRetrying"
+    const val ACTIVE_REQUESTS_CHANGED = "Victorycodedev\\NativephpFetch\\Events\\FetchActiveRequestsChanged"
 }

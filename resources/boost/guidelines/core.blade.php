@@ -126,6 +126,12 @@ maxAttempts, delayMs, reason, status)`, `FetchUploadProgress`,
 `#[On(...)]` in v4 NativeComponents. A timeout is failure code `timeout`; only
 explicit cancellation emits the cancelled event.
 
+For a reactive transfer screen, load `Fetch::active()` on mount and listen for
+`FetchActiveRequestsChanged(requestId, change)`. Its changes are `started`,
+`progress`, `waiting_retry`, `running`, and `finished`. Progress invalidations
+are throttled natively to 250 milliseconds; refresh `Fetch::active()` in the
+listener instead of maintaining a second request-state model.
+
 For ordinary PHP tests call `Fetch::fake(['url/*' =>
 FetchResponse::make(...)])`, then use `assertSent`, `assertNotSent`,
 `assertSentCount`, and `restore`. Assertion callbacks receive `RecordedRequest`

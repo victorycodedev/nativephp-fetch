@@ -22,6 +22,10 @@ private final class FetchClient: NSObject,
 
     private var retryOperations: [String: StandardRetryState] = [:]
 
+    private var announcedActiveRequests: Set<String> = []
+
+    private var activeProgressTimes: [String: TimeInterval] = [:]
+
     private lazy var session: URLSession = {
         URLSession(
             configuration: .default,
@@ -186,11 +190,19 @@ private final class FetchClient: NSObject,
             lock.unlock()
             return
         }
+        let resumed = state.attempt > 0
         state.attempt += 1
         state.state = "running"
         state.nextRetryAt = nil
         state.bytesTransferred = 0
         lock.unlock()
+
+        if resumed {
+            emitActiveRequestsChanged(
+                requestId: state.requestId,
+                change: "running"
+            )
+        }
 
         let completion: (Data?, URLResponse?, Error?) -> Void = {
             [weak self, weak state] data, response, error in
@@ -1544,6 +1556,10 @@ private final class FetchClient: NSObject,
             self.tasks[state.requestId] = task
             self.requestIdsByTaskIdentifier[task.taskIdentifier] = state.requestId
             self.lock.unlock()
+            self.emitActiveRequestsChanged(
+                requestId: state.requestId,
+                change: "running"
+            )
             task.resume()
         }
         state.retryWorkItem = item
@@ -1622,6 +1638,10 @@ private final class FetchClient: NSObject,
                 "url": url,
             ]
         )
+        lock.lock()
+        announcedActiveRequests.insert(requestId)
+        lock.unlock()
+        emitActiveRequestsChanged(requestId: requestId, change: "started")
     }
 
     private func emitCompleted(
@@ -1639,6 +1659,7 @@ private final class FetchClient: NSObject,
                 "body": body,
             ]
         )
+        emitActiveRequestsChanged(requestId: requestId, change: "finished")
     }
 
     private func emitFailure(
@@ -1659,6 +1680,7 @@ private final class FetchClient: NSObject,
             name: FetchEvents.failed,
             payload: payload
         )
+        emitActiveRequestsChanged(requestId: requestId, change: "finished")
     }
 
     private func emitCancelled(
@@ -1670,6 +1692,7 @@ private final class FetchClient: NSObject,
                 "requestId": requestId
             ]
         )
+        emitActiveRequestsChanged(requestId: requestId, change: "finished")
     }
 
     private func emitUploadProgress(
@@ -1686,6 +1709,11 @@ private final class FetchClient: NSObject,
                 "bytesTotal": bytesTotal,
                 "progress": progress,
             ]
+        )
+        emitActiveRequestsChanged(
+            requestId: requestId,
+            change: "progress",
+            throttle: true
         )
     }
 
@@ -1722,6 +1750,11 @@ private final class FetchClient: NSObject,
                 "progress": progressValue,
             ]
         )
+        emitActiveRequestsChanged(
+            requestId: requestId,
+            change: "progress",
+            throttle: true
+        )
     }
 
     private func emitDownloadCompleted(
@@ -1741,6 +1774,7 @@ private final class FetchClient: NSObject,
                 "bytesReceived": bytesReceived,
             ]
         )
+        emitActiveRequestsChanged(requestId: requestId, change: "finished")
     }
 
     private func emitSharedCompleted(
@@ -1840,6 +1874,49 @@ private final class FetchClient: NSObject,
                 "delayMs": delayMs,
                 "reason": reason,
                 "status": status.map { $0 } ?? NSNull(),
+            ]
+        )
+        emitActiveRequestsChanged(
+            requestId: requestId,
+            change: "waiting_retry"
+        )
+    }
+
+    private func emitActiveRequestsChanged(
+        requestId: String,
+        change: String,
+        throttle: Bool = false
+    ) {
+        lock.lock()
+
+        if change == "finished" {
+            guard announcedActiveRequests.remove(requestId) != nil else {
+                lock.unlock()
+                return
+            }
+            activeProgressTimes.removeValue(forKey: requestId)
+        } else if change != "started",
+                  !announcedActiveRequests.contains(requestId) {
+            lock.unlock()
+            return
+        }
+
+        if throttle {
+            let now = Date().timeIntervalSince1970
+            if let previous = activeProgressTimes[requestId],
+               now - previous < 0.25 {
+                lock.unlock()
+                return
+            }
+            activeProgressTimes[requestId] = now
+        }
+
+        lock.unlock()
+        dispatchEvent(
+            name: FetchEvents.activeRequestsChanged,
+            payload: [
+                "requestId": requestId,
+                "change": change,
             ]
         )
     }
