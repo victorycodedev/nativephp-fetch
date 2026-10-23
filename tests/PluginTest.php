@@ -214,6 +214,55 @@ describe('Documentation', function () {
         );
     });
 
+    it('lists every supported API surface in the API reference', function () {
+        $reference = file_get_contents($this->pluginPath.'/docs/api-reference.md');
+
+        $phpMethods = [
+            'request(', 'baseUrl(', 'withHeader(', 'withHeaders(', 'withToken(',
+            'acceptJson(', 'asJson(', 'asForm(', 'withBody(', 'timeout(',
+            'shared(', 'retry(', 'attach(', 'attachMany(', 'get(', 'post(',
+            'put(', 'patch(', 'delete(', 'download(', 'cancel(', 'active(',
+            'isActive(', 'cancelAll(', 'fake(', 'restore(', 'isFaking(',
+            'fakeInstance(', 'assertSent(', 'assertNotSent(', 'assertSentCount(',
+            'assertShared(', 'macro(', 'mixin(', 'hasMacro(', 'flushMacros(',
+        ];
+
+        $responseMethods = [
+            'from(', 'fromEvent(', 'make(', 'withRequestId(', 'requestId(',
+            'status(', 'headers(', 'header(', 'body(', 'json(', 'statusIs(',
+            'ok(', 'created(', 'accepted(', 'noContent(', 'movedPermanently(',
+            'found(', 'badRequest(', 'unauthorized(', 'paymentRequired(',
+            'forbidden(', 'notFound(', 'methodNotAllowed(', 'requestTimeout(',
+            'conflict(', 'gone(', 'unprocessableEntity(', 'tooManyRequests(',
+            'internalServerError(', 'serviceUnavailable(', 'successful(',
+            'redirect(', 'failed(', 'clientError(', 'serverError(',
+        ];
+
+        $events = [
+            'FetchRequestStarted', 'FetchRequestCompleted', 'FetchRequestFailed',
+            'FetchRequestCancelled', 'FetchRequestRetrying', 'FetchUploadProgress',
+            'FetchDownloadProgress', 'FetchDownloadCompleted',
+            'FetchActiveRequestsChanged',
+        ];
+
+        expect($reference)
+            ->toContain(...$phpMethods)
+            ->toContain(...$responseMethods)
+            ->toContain(...$events)
+            ->toContain(
+                '## ActiveRequest',
+                '## Testing value objects',
+                '### RecordedRequest',
+                '## JavaScript client',
+            )
+            ->not->toContain(
+                '`bridge()`',
+                'bridgeCall(method, params)',
+                'start(params)',
+                'downloadNative(params)',
+            );
+    });
+
     it('starts the whats new history with the upcoming release and feature guides', function () {
         $whatsNew = file_get_contents($this->pluginPath.'/docs/whats-new.md');
         $config = file_get_contents($this->pluginPath.'/docs/.vitepress/config.mjs');
