@@ -8,6 +8,6 @@
         "test": "node --test fetch.test.js"
     },
     "devDependencies": {
-        "prettier": "^3.9.6"
+        "prettier": "^3.9.10"
     }
 }
