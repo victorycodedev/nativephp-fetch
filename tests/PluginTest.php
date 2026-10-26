@@ -263,7 +263,7 @@ describe('Documentation', function () {
             );
     });
 
-    it('starts the whats new history with the upcoming release and feature guides', function () {
+    it('starts the whats new history with the latest release and feature guides', function () {
         $whatsNew = file_get_contents($this->pluginPath.'/docs/whats-new.md');
         $config = file_get_contents($this->pluginPath.'/docs/.vitepress/config.mjs');
 
@@ -271,6 +271,7 @@ describe('Documentation', function () {
             ->toContain('## 1.2.0')
             ->toContain('[Shared events](/shared-events)')
             ->toContain('[Active requests](/active-requests)')
+            ->not->toContain('(upcoming)')
             ->not->toContain('## 1.1.0', '## 1.0.0')
             ->and($config)->toContain('/whats-new');
     });

@@ -1,6 +1,6 @@
 # What's new
 
-## 1.2.0 (upcoming)
+## 1.2.0
 
 ### Shared terminal events
 
