@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-12
+
+### Changed
+
+- Moved the public documentation to Viqecodes and updated every README guide link.
+- Added a theme-aware FLOSSAfrica funding badge to the README.
+- Retired the previous GitHub Pages documentation site and deployment workflow.
+
+### Fixed
+
+- Declared the Laravel event dispatcher as a direct dependency so NativePHP global events work with stable standalone package installations.
+- Updated the global-event test bootstrap to resolve Laravel's event dispatcher consistently across the supported dependency matrix.
+
+## [1.2.0] - 2026-10-23
+
 ### Added
 
 - Added reusable Fetch manager macros through Laravel's `Macroable` trait.
@@ -50,5 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Request fakes, recorded-request assertions, and lifecycle event data objects.
 - NativePHP marketplace metadata and PHP and JavaScript usage documentation.
 
-[Unreleased]: https://github.com/victorycodedev/nativephp-fetch/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/victorycodedev/nativephp-fetch/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/victorycodedev/nativephp-fetch/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/victorycodedev/nativephp-fetch/releases/tag/v1.2.0
 [1.0.0]: https://github.com/victorycodedev/nativephp-fetch/releases/tag/v1.0.0
