@@ -169,17 +169,13 @@ describe('PHP Classes', function () {
 describe('Documentation', function () {
     it('documents common methods NativeComponents and queued job limitations', function () {
         $readme = file_get_contents($this->pluginPath.'/README.md');
-        $docs = collect(glob($this->pluginPath.'/docs/*.md'))
-            ->map(fn (string $path) => file_get_contents($path))
-            ->implode("\n");
         $boost = file_get_contents($this->pluginPath.'/resources/boost/guidelines/core.blade.php');
 
-        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'NativeComponent', 'queued jobs', 'Laravel\'s normal HTTP client'] as $term) {
-            expect($readme.$docs)->toContain($term);
+        foreach (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'NativeComponent', 'queued jobs', 'Laravel\'s HTTP client'] as $term) {
+            expect($readme)->toContain($term);
         }
 
-        expect($docs)->toContain('<native:button', '#[On(FetchRequestCompleted::class)]')
-            ->and($boost)->toContain('Never use it', 'queued jobs', 'Laravel\'s `Http` facade');
+        expect($boost)->toContain('Never use it', 'queued jobs', 'Laravel\'s `Http` facade');
     });
 
     it('uses the NativePHP marketplace required README headings', function () {
@@ -192,88 +188,26 @@ describe('Documentation', function () {
         );
     });
 
-    it('documents installation uploads events testing and the public API', function () {
+    it('links every documentation section to the Viqecodes documentation', function () {
         $readme = file_get_contents($this->pluginPath.'/README.md');
-        $docs = collect(glob($this->pluginPath.'/docs/*.md'))
-            ->map(fn (string $path) => file_get_contents($path))
-            ->implode("\n");
 
-        expect($readme.$docs)->toContain(
-            'https://nativephp.com/docs/mobile/4/plugins/using-plugins',
-            'php artisan native:plugin:list',
-            'php artisan native:run',
-            '# File uploads',
-            '## Upload one file',
-            '## Upload multiple files',
-            '## Upload progress',
-            'FetchUploadProgress::class',
-            '# Testing',
-            '## Event reference',
-            '# API reference',
-            'Event::listen(FetchRequestCompleted::class',
-        );
-    });
-
-    it('lists every supported API surface in the API reference', function () {
-        $reference = file_get_contents($this->pluginPath.'/docs/api-reference.md');
-
-        $phpMethods = [
-            'request(', 'baseUrl(', 'withHeader(', 'withHeaders(', 'withToken(',
-            'acceptJson(', 'asJson(', 'asForm(', 'withBody(', 'timeout(',
-            'shared(', 'retry(', 'attach(', 'attachMany(', 'get(', 'post(',
-            'put(', 'patch(', 'delete(', 'download(', 'cancel(', 'active(',
-            'isActive(', 'cancelAll(', 'fake(', 'restore(', 'isFaking(',
-            'fakeInstance(', 'assertSent(', 'assertNotSent(', 'assertSentCount(',
-            'assertShared(', 'macro(', 'mixin(', 'hasMacro(', 'flushMacros(',
-        ];
-
-        $responseMethods = [
-            'from(', 'fromEvent(', 'make(', 'withRequestId(', 'requestId(',
-            'status(', 'headers(', 'header(', 'body(', 'json(', 'statusIs(',
-            'ok(', 'created(', 'accepted(', 'noContent(', 'movedPermanently(',
-            'found(', 'badRequest(', 'unauthorized(', 'paymentRequired(',
-            'forbidden(', 'notFound(', 'methodNotAllowed(', 'requestTimeout(',
-            'conflict(', 'gone(', 'unprocessableEntity(', 'tooManyRequests(',
-            'internalServerError(', 'serviceUnavailable(', 'successful(',
-            'redirect(', 'failed(', 'clientError(', 'serverError(',
-        ];
-
-        $events = [
-            'FetchRequestStarted', 'FetchRequestCompleted', 'FetchRequestFailed',
-            'FetchRequestCancelled', 'FetchRequestRetrying', 'FetchUploadProgress',
-            'FetchDownloadProgress', 'FetchDownloadCompleted',
-            'FetchActiveRequestsChanged',
-        ];
-
-        expect($reference)
-            ->toContain(...$phpMethods)
-            ->toContain(...$responseMethods)
-            ->toContain(...$events)
+        expect($readme)
             ->toContain(
-                '## ActiveRequest',
-                '## Testing value objects',
-                '### RecordedRequest',
-                '## JavaScript client',
+                'https://viqecodes.com/opensource/nativephp-fetch',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/whats-new',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/getting-started',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/requests',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/native-component',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/javascript',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/uploads',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/downloads',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/events',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/shared-events',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/active-requests',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/retries-cancellation',
+                'https://viqecodes.com/opensource/nativephp-fetch/docs/api-reference',
             )
-            ->not->toContain(
-                '`bridge()`',
-                'bridgeCall(method, params)',
-                'start(params)',
-                'downloadNative(params)',
-            );
-    });
-
-    it('starts the whats new history with the latest release and feature guides', function () {
-        $whatsNew = file_get_contents($this->pluginPath.'/docs/whats-new.md');
-        $config = file_get_contents($this->pluginPath.'/docs/.vitepress/config.mjs');
-
-        expect($whatsNew)
-            ->toContain('## 1.2.0')
-            ->toContain('[Shared events](/shared-events)')
-            ->toContain('[Active requests](/active-requests)')
-            ->not->toContain('(upcoming)')
-            ->not->toContain('## 1.1.0', '## 1.0.0')
-            ->and($config)->toContain('/whats-new');
+            ->not->toContain('victorycodedev.github.io/nativephp-fetch');
     });
 });
 

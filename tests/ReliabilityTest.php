@@ -74,12 +74,3 @@ it('contains no obsolete ios lifecycle implementation or diagnostic logging', fu
         'println(',
     );
 });
-
-it('starts the whats new history with the latest release', function () {
-    $whatsNew = nativeSource('/docs/whats-new.md');
-
-    expect($whatsNew)
-        ->toContain('## 1.2.0', '### Reliability and compatibility')
-        ->not->toContain('(upcoming)')
-        ->not->toContain('## 1.1.0', '## 1.0.0');
-});

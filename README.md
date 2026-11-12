@@ -33,32 +33,32 @@ excludes future major versions.
 ## Documentation
 
 Read the complete documentation at
-[victorycodedev.github.io/nativephp-fetch](https://victorycodedev.github.io/nativephp-fetch/).
+[viqecodes.com/opensource/nativephp-fetch](https://viqecodes.com/opensource/nativephp-fetch).
 
-See [what's new](https://victorycodedev.github.io/nativephp-fetch/whats-new) for short, versioned examples of recently added APIs.
+See [what's new](https://viqecodes.com/opensource/nativephp-fetch/docs/whats-new) for short, versioned examples of recently added APIs.
 
 ## Installation
 
-See the [installation guide](https://victorycodedev.github.io/nativephp-fetch/getting-started).
+See the [installation guide](https://viqecodes.com/opensource/nativephp-fetch/docs/getting-started).
 
 ## Usage (PHP)
 
-See [making requests with PHP](https://victorycodedev.github.io/nativephp-fetch/requests)
-and the [NativeComponent example](https://victorycodedev.github.io/nativephp-fetch/native-component).
+See [making requests with PHP](https://viqecodes.com/opensource/nativephp-fetch/docs/requests)
+and the [NativeComponent example](https://viqecodes.com/opensource/nativephp-fetch/docs/native-component).
 
 ## Usage (JavaScript)
 
-See the [JavaScript client guide](https://victorycodedev.github.io/nativephp-fetch/javascript).
+See the [JavaScript client guide](https://viqecodes.com/opensource/nativephp-fetch/docs/javascript).
 
 ## Feature guides
 
-- [Uploads](https://victorycodedev.github.io/nativephp-fetch/uploads)
-- [Downloads](https://victorycodedev.github.io/nativephp-fetch/downloads)
-- [Events and responses](https://victorycodedev.github.io/nativephp-fetch/events)
-- [Shared events](https://victorycodedev.github.io/nativephp-fetch/shared-events)
-- [Active requests](https://victorycodedev.github.io/nativephp-fetch/active-requests)
-- [Retries and cancellation](https://victorycodedev.github.io/nativephp-fetch/retries-cancellation)
-- [API reference](https://victorycodedev.github.io/nativephp-fetch/api-reference)
+- [Uploads](https://viqecodes.com/opensource/nativephp-fetch/docs/uploads)
+- [Downloads](https://viqecodes.com/opensource/nativephp-fetch/docs/downloads)
+- [Events and responses](https://viqecodes.com/opensource/nativephp-fetch/docs/events)
+- [Shared events](https://viqecodes.com/opensource/nativephp-fetch/docs/shared-events)
+- [Active requests](https://viqecodes.com/opensource/nativephp-fetch/docs/active-requests)
+- [Retries and cancellation](https://viqecodes.com/opensource/nativephp-fetch/docs/retries-cancellation)
+- [API reference](https://viqecodes.com/opensource/nativephp-fetch/docs/api-reference)
 
 ## Support
 
