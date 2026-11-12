@@ -1,6 +1,11 @@
 # Fetch for NativePHP Mobile
 
-[Sponsor the continued development of NativePHP Fetch](https://flossafrica.com/m/victorycodedev)
+<a href="https://flossafrica.com/m/victorycodedev?p=nativephp-fetch">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://flossafrica.com/badge.svg?theme=dark">
+    <img alt="Fund my work on FLOSSAfrica" src="https://flossafrica.com/badge.svg">
+  </picture>
+</a>
 
 Fetch is a free community networking plugin for NativePHP Mobile. It provides
 an expressive, fluent API for truly asynchronous HTTP requests on Android and
