@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Container\Container;
+use Illuminate\Events\Dispatcher;
 use Native\Mobile\Attributes\On;
 use Native\Mobile\Edge\NativeComponent;
 use Native\Mobile\Events\Concerns\BroadcastsGlobally;
@@ -15,11 +16,17 @@ use Victorycodedev\NativephpFetch\Events\FetchRequestStarted;
 use Victorycodedev\NativephpFetch\Events\FetchUploadProgress;
 
 if (! function_exists('app')) {
-    function app(): Container
+    function app(?string $abstract = null): mixed
     {
         static $container;
 
-        return $container ??= new Container;
+        $container ??= new Container;
+
+        if (! $container->bound('events')) {
+            $container->instance('events', new Dispatcher($container));
+        }
+
+        return $abstract === null ? $container : $container->make($abstract);
     }
 }
 

@@ -221,6 +221,7 @@ describe('Composer Configuration', function () {
 
         expect(json_last_error())->toBe(JSON_ERROR_NONE);
         expect($composer['type'])->toBe('nativephp-plugin');
+        expect($composer['require']['illuminate/events'])->toBe('^11.0 || ^12.0 || ^13.0');
         expect($composer['extra']['nativephp']['manifest'])->toBe('nativephp.json');
     });
 });
